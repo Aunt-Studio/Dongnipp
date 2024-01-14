@@ -14,6 +14,7 @@ namespace Dongnipp
     internal class dongniSDK
     {
         private static RSAParameters publicKey; // 全局RSA公钥
+        private static bool debugging;
         /// <summary>
         /// 登录懂你平台，并获取查询需要用的各种参数数据。
         /// 
@@ -47,7 +48,7 @@ namespace Dongnipp
             post = "{\"accountName\":\"" + aN + "\",\"password\":\"" + pw + "\",\"validate\":null,\"userId\":null,\"clientType\":1}";
             back = await PostRequest("https://www.dongni100.com/api/base/data/encrypt/login", post, "application/json");
 
-            Console.WriteLine("dongni_login Back: " + back);
+            writeLog("dongni_login Back: " + back, "Server Back", true);
 
             JObject json = JObject.Parse(back);
             string status = json["status"].ToString();
@@ -99,7 +100,7 @@ namespace Dongnipp
             string URL = "https://www.dongni100.com/api/exam/plan/student/latest?clientType=1&examType=2,3,4,5,7,9,10&userId=" + userId + "&studentId=" + studentId;
             string back = await GetResponse(URL, Token);
 
-            Console.WriteLine("Getting Latest Back = " + back);
+            writeLog("Getting Latest Back = " + back, "Server Back", true);
 
             JObject json = JObject.Parse(back);
             string status = json["status"].ToString();
@@ -119,7 +120,7 @@ namespace Dongnipp
             }
             else
             {
-                writeLog("Error while getLatest. Server returned: " + back, "Error");
+                
             }
             return (firstExam, secondExam, status);
         }
@@ -131,7 +132,7 @@ namespace Dongnipp
             string URL = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
             string back = await GetResponse(URL, token);
 
-            Console.WriteLine("GettingSchoolInfo Back: " + back);
+            writeLog("GettingSchoolInfo Back: " + back, "Server Back", true);
 
             JObject json = JObject.Parse(back);
             string status = json["status"].ToString();
@@ -148,6 +149,7 @@ namespace Dongnipp
             {
                 schoolId = "0";
                 schoolName = "Error, back=" + back;
+                writeLog("Error while getSchoolInfo. Server returned: " + back, "Error");
             }
             return (schoolId, schoolName);
         }
@@ -172,12 +174,22 @@ namespace Dongnipp
                 return responseContent;
             }
         }
-        private static void writeLog(string message,string eventType,  bool isDebug=false) { 
-            if(isDebug)
+        private static void writeLog(string message,string eventType="INFO",  bool isDebug=false) { 
+            if(isDebug && debugging)
             {
                 Console.WriteLine($"[Debug / {eventType}] " + message);
-            }else { Console.WriteLine($"[{eventType}]" + message); }
+            }else if(!isDebug) { 
+                Console.WriteLine($"[{eventType}]" + message); 
+            }
             
+        }
+        /// <summary>
+        /// 设置在dongniSDK中是否输出调试信息。
+        /// </summary>
+        /// <param name="debug">true为全局输出调试日志，反之不输出。</param>
+        public static void setDebug(bool debug)
+        {
+            debugging = debug;
         }
     }
 }

@@ -10,6 +10,7 @@ namespace Dongnipp
     {
         public static async Task Main()
         {
+            dongniSDK.setDebug(false);
             Console.WriteLine("\r\n  _____                          _             \r\n |  __ \\                        (_)  _     _   \r\n | |  | | ___  _ __   __ _ _ __  _ _| |_ _| |_ \r\n | |  | |/ _ \\| '_ \\ / _` | '_ \\| |_   _|_   _|\r\n | |__| | (_) | | | | (_| | | | | | |_|   |_|  \r\n |_____/ \\___/|_| |_|\\__, |_| |_|_|            \r\n                      __/ |                    \r\n                     |___/                     \r\n");
             Console.WriteLine();
             Console.WriteLine("请输入UserName:");
