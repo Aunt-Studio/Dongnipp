@@ -14,10 +14,17 @@ namespace Dongnipp
     internal class dongniSDK
     {
         private static RSAParameters publicKey; // 全局RSA公钥
-        public static async Task<(string Token, string userId, string studentId, string userName, string accountName, string errorInfo)> dongni_login(string username, string password)
+        /// <summary>
+        /// 登录懂你平台，并获取查询需要用的各种参数数据。
+        /// 
+        /// 
+        /// </summary>
+        /// <param name="username">用户名 (应该是手机号)</param>
+        /// <param name="password">密码</param>
+        /// <returns>返回值 string errorInfo 出现错误则存在返回，无错误(status == 0)返回NULL =_=</returns>
+        public static async Task<(string Token, string userId, string studentId, string userName, string accountName, string errorInfo)> login(string username, string password)
         {
-            //登录懂你平台，并获取查询需要用的各种参数数据。
-            //返回值 string errorInfo 出现错误则存在返回，无错误(status = 0)返回NULL =_=
+
             string errorInfo;
             string accountName;
             string userName;
@@ -74,17 +81,48 @@ namespace Dongnipp
 
             return (Token, userId, targetStudentId, userName, accountName, errorInfo);
         }
-        private static async Task<string> PostRequest(string url, string postData, string contentType)
+        /// <summary>
+        /// 获取最近两次考试信息。
+        /// </summary>
+        /// <param name="Token">登录时获取的用户 Token</param>
+        /// <param name="userId">登录时获取的用户 userId</param>
+        /// <param name="studentId">登录时获取的 studentId</param>
+        /// <param name="status">状态值，非0即错误</param>
+        /// <returns>返回的两个变量数组: 
+        /// {1.考试名称, 2.考试ID, 3.考试类型ID, 4.考试开始日期, 5.考试结束日期}</returns>
+        public static async Task<(string[] firstExam, string[] secondExam, string status)> getLatest(string Token, string userId, string studentId)
         {
-            using (HttpClient client = new HttpClient())
-            {
-                StringContent content = new StringContent(postData, Encoding.UTF8, contentType);
-                HttpResponseMessage response = await client.PostAsync(url, content);
-                string responseContent = await response.Content.ReadAsStringAsync();
-                return responseContent;
-            }
-        }
+            string[] firstExam = { "", "", "", "", "" };
+            //{1.考试名称, 2.考试ID, 3.考试类型ID, 4.考试开始日期, 5.考试结束日期}
+            string[] secondExam = { "", "", "", "", "" };
 
+            string URL = "https://www.dongni100.com/api/exam/plan/student/latest?clientType=1&examType=2,3,4,5,7,9,10&userId=" + userId + "&studentId=" + studentId;
+            string back = await GetResponse(URL, Token);
+
+            Console.WriteLine("Getting Latest Back = " + back);
+
+            JObject json = JObject.Parse(back);
+            string status = json["status"].ToString();
+
+            if (status == "0")
+            {
+                firstExam[0] = json["data"][0]["examName"].ToString();
+                firstExam[1] = json["data"][0]["examId"].ToString();
+                firstExam[2] = json["data"][0]["examId"].ToString();
+                firstExam[3] = json["data"][0]["startDate"].ToString();
+                firstExam[4] = json["data"][0]["endDate"].ToString();
+                secondExam[0] = json["data"][1]["examName"].ToString();
+                secondExam[1] = json["data"][1]["examId"].ToString();
+                secondExam[2] = json["data"][1]["examId"].ToString();
+                secondExam[3] = json["data"][1]["startDate"].ToString();
+                secondExam[4] = json["data"][1]["endDate"].ToString();
+            }
+            else
+            {
+                writeLog("Error while getLatest. Server returned: " + back, "Error");
+            }
+            return (firstExam, secondExam, status);
+        }
         public static async Task<(string, string)> getSchoolInfo(string token)
         {
             string schoolId = "";
@@ -123,6 +161,23 @@ namespace Dongnipp
                 string responseContent = await response.Content.ReadAsStringAsync();
                 return responseContent;
             }
+        }
+        private static async Task<string> PostRequest(string url, string postData, string contentType)
+        {
+            using (HttpClient client = new HttpClient())
+            {
+                StringContent content = new StringContent(postData, Encoding.UTF8, contentType);
+                HttpResponseMessage response = await client.PostAsync(url, content);
+                string responseContent = await response.Content.ReadAsStringAsync();
+                return responseContent;
+            }
+        }
+        private static void writeLog(string message,string eventType,  bool isDebug=false) { 
+            if(isDebug)
+            {
+                Console.WriteLine($"[Debug / {eventType}] " + message);
+            }else { Console.WriteLine($"[{eventType}]" + message); }
+            
         }
     }
 }
