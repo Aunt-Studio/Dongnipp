@@ -4,10 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 // This is just a TESTING file!!!
-namespace Dongnipp
+namespace top.nuozhen.Dongnipp.test
 {
     internal class Program
     {
+        // This is just a TESTING file!!!
         public static async Task Main()
         {
             dongniSDK.setDebug(false);

@@ -9,11 +9,11 @@ using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography;
 
-namespace Dongnipp
+namespace top.nuozhen.Dongnipp
 {
     internal class dongniSDK
     {
-        private static RSAParameters publicKey; // 全局RSA公钥
+        private static RSAParameters publicKey; // 全局RSA公钥Parameters
         private static bool debugging;
         /// <summary>
         /// 登录懂你平台，并获取查询需要用的各种参数数据。
