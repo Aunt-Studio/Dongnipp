@@ -11,6 +11,20 @@ using System.Security.Cryptography;
 
 namespace top.nuozhen.Dongnipp
 {
+    /*
+      _____                               _                  _____  _____   _  __
+     |  __ \                             (_)   _      _     / ____||  __ \ | |/ /
+     | |  | |  ___   _ __    __ _  _ __   _  _| |_  _| |_  | (___  | |  | || ' / 
+     | |  | | / _ \ | '_ \  / _` || '_ \ | ||_   _||_   _|  \___ \ | |  | ||  <  
+     | |__| || (_) || | | || (_| || | | || |  |_|    |_|    ____) || |__| || . \ 
+     |_____/  \___/ |_| |_| \__, ||_| |_||_|               |_____/ |_____/ |_|\_\
+                             __/ |                                               
+                            |___/                                                
+    Dongni++ SDK
+    Developed by Aunt Studio
+    Also see this: https://github.com/Aunt-Studio/Dongnipp
+    */
+
     internal class dongniSDK
     {
         private static RSAParameters publicKey; // 全局RSA公钥Parameters
@@ -53,14 +67,8 @@ namespace top.nuozhen.Dongnipp
             JObject json = JObject.Parse(back);
             string status = json["status"].ToString();
 
-            if (status != "0")
+            if (status == "0")
             {
-                errorInfo = "服务器返回错误。JSON返回：" + back;
-                Token = accountName = userName = userId = targetStudentId = null;
-            }
-            else
-            {
-               
                 Token = json["data"]["dongniLoginToken"].ToString();
                 accountName = json["data"]["accountName"].ToString();
                 userName = json["data"]["userName"].ToString();
@@ -72,12 +80,19 @@ namespace top.nuozhen.Dongnipp
 
                 int lastIndex = json_stuid["data"][0]["userList"].Count() - 1;
                 targetStudentId = json_stuid["data"][0]["userList"][lastIndex]["studentId"].ToString();
-                
+
 
                 json_stuid = null;
                 errorInfo = null;
-            }
 
+            }
+            else
+            {
+                errorInfo = "服务器返回错误。JSON返回：" + back;
+                Token = accountName = userName = userId = targetStudentId = null;
+
+            }
+            
             json = null;
 
             return (Token, userId, targetStudentId, userName, accountName, errorInfo);
@@ -124,35 +139,110 @@ namespace top.nuozhen.Dongnipp
             }
             return (firstExam, secondExam, status);
         }
-        public static async Task<(string, string)> getSchoolInfo(string token)
+
+        /// <summary>
+        /// 获取该studentId下所有考试列表(实际为前100个)，以各考试属性数组形式返回。| 通常而言，数组下标越接近于0，则考试时间越接近。
+        /// </summary>
+        /// <param name="Token">登录时获取的用户 Token</param>
+        /// <param name="userId">登录时获取的用户 userId</param>
+        /// <param name="studentId">待获取列表的studentId</param>
+        /// <param name="SchoolId">目标学校schoolId。必须使用getRoleInfo() 获取。</param>
+        /// <returns>各考试属性值。以数组形式返回。</returns>
+        public static async Task<(string[] examName, string[] examId, string[] examType, string[] startDate, string[] endDate)> getExamList(string Token, string userId, string studentId, string SchoolId)
         {
-            string schoolId = "";
-            string schoolName = "";
+            string URL = $"https://www.dongni100.com/api/exam/plan/student/exam/list?clientType=1&schoolId={SchoolId}&examType=2,3,4,5,7,10&courseId=&pageSize=100&pageNo=1&userId=" + userId + "&studentId=" + studentId;
+            string back = await GetResponse(URL, Token);
+
+            writeLog("Getting Exam List Back = " + back, "Server Back", true);
+
+            JObject json = JObject.Parse(back);
+            string status = json["status"].ToString();
+            writeLog("Start writing list.", isDebug: true);
+            List<string> List_examName = new List<string> ();
+            List<string> List_examId = new List<string> ();
+            List<string> List_examType = new List<string> ();
+            List<string> List_startDate = new List<string> ();
+            List<string> List_endDate = new List<string> ();
+            if (status == "0")
+            {
+
+
+                for (int i = 0; i < json["data"]["exam"].Count(); i++)
+                {
+
+                    List_examName.Add(json["data"]["exam"][i]["examName"].ToString());
+                    List_examId.Add(json["data"]["exam"][i]["examId"].ToString());
+                    List_examType.Add(json["data"]["exam"][i]["examType"].ToString());
+                    List_startDate.Add(json["data"]["exam"][i]["startDate"].ToString());
+                    List_endDate.Add(json["data"]["exam"][i]["endDate"].ToString());
+                    writeLog($"{i + 1}st exam has written to the list.", isDebug: true);
+                }
+                writeLog("Written to list.", isDebug: true);
+                
+            }
+            else
+            {
+                writeLog("An error occurred while getting exam list: \n\nStatus value is not 0.\n\n Server return: " + back, "Error");
+            }
+            return (List_examName.ToArray(), List_examId.ToArray(), List_examType.ToArray(), List_startDate.ToArray(), List_endDate.ToArray());
+        }
+
+
+        /// <summary>
+        /// 获取当前用户下的第{Sort}个角色信息。通常Sort = 0取到的是默认角色信息。角色信息包含SchoolId、学校名称、班级名称等。本函数在查询列表、需要切换角色等场景下会使用到。
+        /// </summary>
+        /// <param name="token">登录时收到的Token</param>
+        /// <returns></returns>
+        public static async Task<(string schoolId, string schoolName, string className, string gradeName, string studentName, string classNickname, string userType, string userName)> getRoleInfo(string token, int Sort)
+        {
 
             string URL = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
             string back = await GetResponse(URL, token);
 
             writeLog("GettingSchoolInfo Back: " + back, "Server Back", true);
-
+            
             JObject json = JObject.Parse(back);
             string status = json["status"].ToString();
+            JArray userList = (JArray)json["data"][0]["userList"];
 
             if (status == "0")
             {
-                int userListCount = json["data"][0]["userList"].Count();
-                int lastIndex = userListCount - 1;
 
-                schoolId = json["data"][0]["userList"][lastIndex]["schoolId"].ToString();
-                schoolName = json["data"][0]["userList"][lastIndex]["schoolName"].ToString();
+                foreach (JObject user in userList)
+                {
+                    if ((int)user["userSort"] == Sort)
+                    {
+                        JObject selectedUser = user;
+                    }
+                    if (user != null)
+                    {
+                        string schoolId = (string)user["schoolId"];
+                        string schoolName = (string)user["schoolName"];
+                        string className = (string)user["className"];
+                        string gradeName = (string)user["gradeName"];
+                        string studentName = (string)user["studentName"];
+                        string classNickname = (string)user["nickname"];
+                        string userType = (string)user["userType"];
+                        string userName = (string)user["userName"];
+                        return (schoolId, schoolName, className, gradeName, studentName, classNickname, userType, userName);
+                    }
+                    else
+                    {
+                        writeLog("An error occurred while getSchoolInfo: \n\nCannot get specified user infomations.\n\n Server returned: " + back, "Error");
+                    }
+                }
             }
             else
             {
-                schoolId = "0";
-                schoolName = "Error, back=" + back;
-                writeLog("Error while getSchoolInfo. Server returned: " + back, "Error");
+                
+                writeLog("An error occurred while getSchoolInfo: \n\nStatus value is not 0.\n\n Server returned: " + back, "Error");
+                return (null, null, null, null, null, null, null, null);
             }
-            return (schoolId, schoolName);
+            return (null, null, null, null, null, null, null, null);
+
+
         }
+
 
         private static async Task<string> GetResponse(string url, string token)
         {

@@ -11,7 +11,7 @@ using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Crypto.Parameters;
 
-namespace Dongnipp
+namespace top.nuozhen.Dongnipp
 {
     internal class RSAUtils
     {
