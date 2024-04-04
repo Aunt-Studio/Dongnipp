@@ -37,65 +37,72 @@ namespace top.nuozhen.Dongnipp
         /// <param name="username">用户名 (应该是手机号)</param>
         /// <param name="password">密码</param>
         /// <returns>返回值 string errorInfo 出现错误则存在返回，无错误(status == 0)返回NULL =_=</returns>
-        public static async Task<(string Token, string userId, string studentId, string userName, string accountName, string errorInfo)> login(string username, string password)
+        public static async Task<(string Token, string userId, string studentId, string userName, string accountName)> login(string username, string password)
         {
-
-            string errorInfo;
-            string accountName;
-            string userName;
-            string userId;
-            string targetStudentId;
-            string post;
-            string back;
-            string back_stuid;
-            string aN;
-            string pw;
-            string Token;
-
-            // 加载RSA公钥
-            string publicKeyPem = "-----BEGIN PUBLIC KEY-----MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCphVCsMh1khU8W0l1WBu0RHTprNr+e2iO0+lLdx+I0tAzCj7jdr5h+tcqZazFuwa751wuegYb0XDbm+/Ti7mWH/Etm+Qc9c5+dBZGzEH0zH8f1cV8EfU8qcsNtn/ixAS7HDl0nzhzlATmH8iFa3l2dYoMBxUZV6Bpyj+gSWg+Y5QIDAQAB-----END PUBLIC KEY-----";
-            publicKey = RSAUtils.GetPublicKeyParameters(publicKeyPem);
-
-            aN = RSAUtils.EncryptToBase64(publicKey, Encoding.Default.GetBytes(username));
-            pw = RSAUtils.EncryptToBase64(publicKey, Encoding.Default.GetBytes(password));
-
-            post = "{\"accountName\":\"" + aN + "\",\"password\":\"" + pw + "\",\"validate\":null,\"userId\":null,\"clientType\":1}";
-            back = await PostRequest("https://www.dongni100.com/api/base/data/encrypt/login", post, "application/json");
-
-            writeLog("dongni_login Back: " + back, "Server Back", true);
-
-            JObject json = JObject.Parse(back);
-            string status = json["status"].ToString();
-
-            if (status == "0")
+            string accountName = null;
+            string userName = null;
+            string userId = null;
+            string targetStudentId = null;
+            string post = null;
+            string back = null;
+            string back_stuid = null;
+            string aN = null;
+            string pw = null;
+            string Token = null;
+            try
             {
-                Token = json["data"]["dongniLoginToken"].ToString();
-                accountName = json["data"]["accountName"].ToString();
-                userName = json["data"]["userName"].ToString();
-                userId = json["data"]["userId"].ToString();
+                // 加载RSA公钥
+                string publicKeyPem = "-----BEGIN PUBLIC KEY-----MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCphVCsMh1khU8W0l1WBu0RHTprNr+e2iO0+lLdx+I0tAzCj7jdr5h+tcqZazFuwa751wuegYb0XDbm+/Ti7mWH/Etm+Qc9c5+dBZGzEH0zH8f1cV8EfU8qcsNtn/ixAS7HDl0nzhzlATmH8iFa3l2dYoMBxUZV6Bpyj+gSWg+Y5QIDAQAB-----END PUBLIC KEY-----";
+                publicKey = RSAUtils.GetPublicKeyParameters(publicKeyPem);
 
-                back_stuid = await GetResponse("https://www.dongni100.com/api/base/data/account/role?clientType=1", Token);
+                aN = RSAUtils.EncryptToBase64(publicKey, Encoding.Default.GetBytes(username));
+                pw = RSAUtils.EncryptToBase64(publicKey, Encoding.Default.GetBytes(password));
 
-                JObject json_stuid = JObject.Parse(back_stuid);
+                post = "{\"accountName\":\"" + aN + "\",\"password\":\"" + pw + "\",\"validate\":null,\"userId\":null,\"clientType\":1}";
+                back = await PostRequest("https://www.dongni100.com/api/base/data/encrypt/login", post, "application/json");
 
-                int lastIndex = json_stuid["data"][0]["userList"].Count() - 1;
-                targetStudentId = json_stuid["data"][0]["userList"][lastIndex]["studentId"].ToString();
+                writeLog("dongni_login Back: " + back, "Server Back", true);
+
+                JObject json = JObject.Parse(back);
+                string status = json["status"].ToString();
+
+                if (status == "0")
+                {
+                    Token = json["data"]["dongniLoginToken"].ToString();
+                    accountName = json["data"]["accountName"].ToString();
+                    userName = json["data"]["userName"].ToString();
+                    userId = json["data"]["userId"].ToString();
+
+                    back_stuid = await GetResponse("https://www.dongni100.com/api/base/data/account/role?clientType=1", Token);
+
+                    JObject json_stuid = JObject.Parse(back_stuid);
+
+                    int lastIndex = json_stuid["data"][0]["userList"].Count() - 1;
+                    targetStudentId = json_stuid["data"][0]["userList"][lastIndex]["studentId"].ToString();
 
 
-                json_stuid = null;
-                errorInfo = null;
+                    json_stuid = null;
 
+                }
+                else
+                {
+                    throw new APIException("Coursed by: Status value is not 0.\n\nThe server returned: "+ back);
+
+                }
+
+                json = null;
+                
             }
-            else
+            catch (APIException ex)
             {
-                errorInfo = "服务器返回错误。JSON返回：" + back;
-                Token = accountName = userName = userId = targetStudentId = null;
-
+                ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at Dongnipp.login Method.", ex));
             }
-            
-            json = null;
+            catch (Exception ex)
+            {
+                ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at Dongnipp.login Method.", ex));
+            }
 
-            return (Token, userId, targetStudentId, userName, accountName, errorInfo);
+            return (Token, userId, targetStudentId, userName, accountName);
         }
         /// <summary>
         /// 获取最近两次考试信息。
@@ -103,41 +110,49 @@ namespace top.nuozhen.Dongnipp
         /// <param name="Token">登录时获取的用户 Token</param>
         /// <param name="userId">登录时获取的用户 userId</param>
         /// <param name="studentId">登录时获取的 studentId</param>
-        /// <param name="status">状态值，非0即错误</param>
         /// <returns>返回的两个变量数组: 
         /// {1.考试名称, 2.考试ID, 3.考试类型ID, 4.考试开始日期, 5.考试结束日期}</returns>
-        public static async Task<(string[] firstExam, string[] secondExam, string status)> getLatest(string Token, string userId, string studentId)
+        public static async Task<(string[] firstExam, string[] secondExam)> getLatest(string Token, string userId, string studentId)
         {
             string[] firstExam = { "", "", "", "", "" };
             //{1.考试名称, 2.考试ID, 3.考试类型ID, 4.考试开始日期, 5.考试结束日期}
             string[] secondExam = { "", "", "", "", "" };
-
-            string URL = "https://www.dongni100.com/api/exam/plan/student/latest?clientType=1&examType=2,3,4,5,7,9,10&userId=" + userId + "&studentId=" + studentId;
-            string back = await GetResponse(URL, Token);
-
-            writeLog("Getting Latest Back = " + back, "Server Back", true);
-
-            JObject json = JObject.Parse(back);
-            string status = json["status"].ToString();
-
-            if (status == "0")
+            try
             {
-                firstExam[0] = json["data"][0]["examName"].ToString();
-                firstExam[1] = json["data"][0]["examId"].ToString();
-                firstExam[2] = json["data"][0]["examId"].ToString();
-                firstExam[3] = json["data"][0]["startDate"].ToString();
-                firstExam[4] = json["data"][0]["endDate"].ToString();
-                secondExam[0] = json["data"][1]["examName"].ToString();
-                secondExam[1] = json["data"][1]["examId"].ToString();
-                secondExam[2] = json["data"][1]["examId"].ToString();
-                secondExam[3] = json["data"][1]["startDate"].ToString();
-                secondExam[4] = json["data"][1]["endDate"].ToString();
-            }
-            else
+
+
+                string URL = "https://www.dongni100.com/api/exam/plan/student/latest?clientType=1&examType=2,3,4,5,7,9,10&userId=" + userId + "&studentId=" + studentId;
+                string back = await GetResponse(URL, Token);
+
+                writeLog("Getting Latest Back = " + back, "Server Back", true);
+
+                JObject json = JObject.Parse(back);
+                string status = json["status"].ToString();
+
+                if (status == "0")
+                {
+                    firstExam[0] = json["data"][0]["examName"].ToString();
+                    firstExam[1] = json["data"][0]["examId"].ToString();
+                    firstExam[2] = json["data"][0]["examId"].ToString();
+                    firstExam[3] = json["data"][0]["startDate"].ToString();
+                    firstExam[4] = json["data"][0]["endDate"].ToString();
+                    secondExam[0] = json["data"][1]["examName"].ToString();
+                    secondExam[1] = json["data"][1]["examId"].ToString();
+                    secondExam[2] = json["data"][1]["examId"].ToString();
+                    secondExam[3] = json["data"][1]["startDate"].ToString();
+                    secondExam[4] = json["data"][1]["endDate"].ToString();
+                }
+                else
+                {
+                    throw new APIException("Coursed by: Status value is not 0.\n\nThe server returned: " + back);
+                }
+            }catch(APIException ex)
             {
-                
+                ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at Dongnipp.getLatest Method.", ex));
+            }catch(Exception ex) {
+                ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at Dongnipp.getLatest Method.", ex));
             }
-            return (firstExam, secondExam, status);
+            return (firstExam, secondExam);
         }
 
         /// <summary>
@@ -150,41 +165,54 @@ namespace top.nuozhen.Dongnipp
         /// <returns>各考试属性值。以数组形式返回。</returns>
         public static async Task<(string[] examName, string[] examId, string[] examType, string[] startDate, string[] endDate)> getExamList(string Token, string userId, string studentId, string SchoolId)
         {
-            string URL = $"https://www.dongni100.com/api/exam/plan/student/exam/list?clientType=1&schoolId={SchoolId}&examType=2,3,4,5,7,10&courseId=&pageSize=100&pageNo=1&userId=" + userId + "&studentId=" + studentId;
-            string back = await GetResponse(URL, Token);
-
-            writeLog("Getting Exam List Back = " + back, "Server Back", true);
-
-            JObject json = JObject.Parse(back);
-            string status = json["status"].ToString();
-            writeLog("Start writing list.", isDebug: true);
-            List<string> List_examName = new List<string> ();
-            List<string> List_examId = new List<string> ();
-            List<string> List_examType = new List<string> ();
-            List<string> List_startDate = new List<string> ();
-            List<string> List_endDate = new List<string> ();
-            if (status == "0")
+            try
             {
+                string URL = $"https://www.dongni100.com/api/exam/plan/student/exam/list?clientType=1&schoolId={SchoolId}&examType=2,3,4,5,7,10&courseId=&pageSize=100&pageNo=1&userId=" + userId + "&studentId=" + studentId;
+                string back = await GetResponse(URL, Token);
 
+                writeLog("Getting Exam List Back = " + back, "Server Back", true);
 
-                for (int i = 0; i < json["data"]["exam"].Count(); i++)
+                JObject json = JObject.Parse(back);
+                string status = json["status"].ToString();
+                writeLog("Start writing list.", isDebug: true);
+                List<string> List_examName = new List<string>();
+                List<string> List_examId = new List<string>();
+                List<string> List_examType = new List<string>();
+                List<string> List_startDate = new List<string>();
+                List<string> List_endDate = new List<string>();
+                if (status == "0")
                 {
 
-                    List_examName.Add(json["data"]["exam"][i]["examName"].ToString());
-                    List_examId.Add(json["data"]["exam"][i]["examId"].ToString());
-                    List_examType.Add(json["data"]["exam"][i]["examType"].ToString());
-                    List_startDate.Add(json["data"]["exam"][i]["startDate"].ToString());
-                    List_endDate.Add(json["data"]["exam"][i]["endDate"].ToString());
-                    writeLog($"{i + 1}st exam has written to the list.", isDebug: true);
+
+                    for (int i = 0; i < json["data"]["exam"].Count(); i++)
+                    {
+
+                        List_examName.Add(json["data"]["exam"][i]["examName"].ToString());
+                        List_examId.Add(json["data"]["exam"][i]["examId"].ToString());
+                        List_examType.Add(json["data"]["exam"][i]["examType"].ToString());
+                        List_startDate.Add(json["data"]["exam"][i]["startDate"].ToString());
+                        List_endDate.Add(json["data"]["exam"][i]["endDate"].ToString());
+                        writeLog($"{i + 1}st exam has written to the list.", isDebug: true);
+                    }
+                    writeLog("Written to list.", isDebug: true);
+
+
                 }
-                writeLog("Written to list.", isDebug: true);
-                
-            }
-            else
+                else
+                {
+                    throw new APIException("Status value is not 0.\n\n The server returned: " + back);
+                }
+                return (List_examName.ToArray(), List_examId.ToArray(), List_examType.ToArray(), List_startDate.ToArray(), List_endDate.ToArray());
+            }catch (APIException ex)
             {
-                writeLog("An error occurred while getting exam list: \n\nStatus value is not 0.\n\n Server return: " + back, "Error");
+                ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at Dongnipp.getExamList Method.", ex));
             }
-            return (List_examName.ToArray(), List_examId.ToArray(), List_examType.ToArray(), List_startDate.ToArray(), List_endDate.ToArray());
+            catch (Exception ex)
+            {
+                ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at Dongnipp.getExamList Method.", ex));
+            }
+            return (null,null,null,null,null);
+
         }
 
 
@@ -193,53 +221,73 @@ namespace top.nuozhen.Dongnipp
         /// </summary>
         /// <param name="token">登录时收到的Token</param>
         /// <returns></returns>
-        public static async Task<(string schoolId, string schoolName, string className, string gradeName, string studentName, string classNickname, string userType, string userName)> getRoleInfo(string token, int Sort)
+        public static async Task<(string schoolId, string schoolName, string className, string gradeName, string studentName, string classNickname, string userType, string userName)> getRoleInfo(string token, int Sort = 0)
         {
-
-            string URL = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
-            string back = await GetResponse(URL, token);
-
-            writeLog("GettingSchoolInfo Back: " + back, "Server Back", true);
-            
-            JObject json = JObject.Parse(back);
-            string status = json["status"].ToString();
-            JArray userList = (JArray)json["data"][0]["userList"];
-
-            if (status == "0")
+            try
             {
+                string schoolId = null;
+                string schoolName = null;
+                string className = null;
+                string gradeName = null;
+                string studentName = null;
+                string classNickname = null;
+                string userType = null;
+                string userName = null;
+                string URL = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
+                string back = await GetResponse(URL, token);
 
-                foreach (JObject user in userList)
+                writeLog("GettingSchoolInfo Back: " + back, "Server Back", true);
+
+                JObject json = JObject.Parse(back);
+                string status = json["status"].ToString();
+                JArray userList = (JArray)json["data"][0]["userList"];
+
+                if (status == "0")
                 {
-                    if ((int)user["userSort"] == Sort)
+
+                    foreach (JObject user in userList)
                     {
-                        JObject selectedUser = user;
-                    }
-                    if (user != null)
-                    {
-                        string schoolId = (string)user["schoolId"];
-                        string schoolName = (string)user["schoolName"];
-                        string className = (string)user["className"];
-                        string gradeName = (string)user["gradeName"];
-                        string studentName = (string)user["studentName"];
-                        string classNickname = (string)user["nickname"];
-                        string userType = (string)user["userType"];
-                        string userName = (string)user["userName"];
-                        return (schoolId, schoolName, className, gradeName, studentName, classNickname, userType, userName);
-                    }
-                    else
-                    {
-                        writeLog("An error occurred while getSchoolInfo: \n\nCannot get specified user infomations.\n\n Server returned: " + back, "Error");
+                        if ((int)user["userSort"] == Sort)
+                        {
+                            JObject selectedUser = user;
+                        }
+                        if (user != null)
+                        {
+                            schoolId = (string)user["schoolId"];
+                            schoolName = (string)user["schoolName"];
+                            className = (string)user["className"];
+                            gradeName = (string)user["gradeName"];
+                            studentName = (string)user["studentName"];
+                            classNickname = (string)user["nickname"];
+                            userType = (string)user["userType"];
+                            userName = (string)user["userName"];
+                            
+                        }
+                        else
+                        {
+                            throw new APIException("Cannot get specified user information.\n\n Server returned: " + back);
+                            
+                        }
+
                     }
                 }
+                else
+                {
+
+                    throw new APIException("Status value is not 0.\n\n The server returned: " + back);
+                }
+                return (schoolId, schoolName, className, gradeName, studentName, classNickname, userType, userName);
+
             }
-            else
+            catch (APIException ex)
             {
-                
-                writeLog("An error occurred while getSchoolInfo: \n\nStatus value is not 0.\n\n Server returned: " + back, "Error");
-                return (null, null, null, null, null, null, null, null);
+                ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at Dongnipp.getRole Method.", ex));
+            }
+            catch (Exception ex)
+            {
+                ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at Dongnipp.getRole Method.", ex));
             }
             return (null, null, null, null, null, null, null, null);
-
 
         }
 
@@ -280,6 +328,39 @@ namespace top.nuozhen.Dongnipp
         public static void setDebug(bool debug)
         {
             debugging = debug;
+        }
+        public delegate void ErrorHandler(object sender, ErrorEventArgs e);
+
+        public static event ErrorHandler ErrorOccurred;
+
+        public class ErrorEventArgs : EventArgs
+        {
+            public string Message { get; set; }
+            public Exception Exception { get; set; }
+
+            public ErrorEventArgs(string message, Exception exception)
+            {
+                Message = message;
+                Exception = exception;
+            }
+
+
+        }
+        public class APIException : Exception
+        {
+            public APIException()
+            {
+            }
+
+            public APIException(string message)
+                : base(message)
+            {
+            }
+
+            public APIException(string message, Exception inner)
+                : base(message, inner)
+            {
+            }
         }
     }
 }

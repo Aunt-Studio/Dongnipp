@@ -25,60 +25,52 @@ namespace top.nuozhen.Dongnipp.test
             Console.WriteLine("Login...");
             try
             {
-                
+
                 Console.WriteLine("\n================================\n");
-                (string Token, string userId, string studentId, string userNickName, string accountName, string errorInfo) = await dongniSDK.login(userName, pwd.ToString());
-                (string schoolId, _,_,_,_,_,_,_) = await dongniSDK.getRoleInfo(Token, 0);
+                (string Token, string userId, string studentId, string userNickName, string accountName) = await dongniSDK.login(userName, pwd.ToString());
+                (string schoolId, _, _, _, _, _, _, _) = await dongniSDK.getRoleInfo(Token, 0);
+                Console.WriteLine("喜报: 没报错 ^o^y");
+                Console.WriteLine("解析结果返回: ");
+                Console.WriteLine("Token = " + Token);
+                Console.WriteLine("userId = " + userId);
+                Console.WriteLine("studentId = " + studentId);
+                Console.WriteLine("userNickName = " + userNickName);
+                Console.WriteLine("accountName = " + accountName);
+                Console.WriteLine("\n================================\n");
+                (string[] firstExam, string[] secondExam) = await dongniSDK.getLatest(Token, userId, studentId);
 
-                if (errorInfo != null)
+                Console.WriteLine("开始输出第一个考试信息");
+                Console.WriteLine("考试名称 = " + firstExam[0]);
+                Console.WriteLine("考试ID = " + firstExam[1]);
+                Console.WriteLine("考试类型 = " + firstExam[2]);
+                Console.WriteLine("考试开始时间 = " + firstExam[3]);
+                Console.WriteLine("考试结束时间 = " + firstExam[4]);
+                Console.WriteLine("\n--------------------------------\n");
+                Console.WriteLine("开始输出第二个考试信息");
+                Console.WriteLine("考试名称 = " + secondExam[0]);
+                Console.WriteLine("考试ID = " + secondExam[1]);
+                Console.WriteLine("考试类型 = " + secondExam[2]);
+                Console.WriteLine("考试开始时间 = " + secondExam[3]);
+                Console.WriteLine("考试结束时间 = " + secondExam[4]);
+
+                Console.WriteLine("\n================================\n");
+                Console.WriteLine("即将输出考试列表, 开始请求考试列表。");
+                Console.WriteLine("\n================================\n");
+                (string[] examName, string[] examId, string[] examType, string[] startDate, string[] endDate) = await dongniSDK.getExamList(Token, userId, studentId, schoolId);
+                for (int i = 0; i < examName.Length; i++)
                 {
-                    Console.WriteLine("悲报: 登录出现错误");
-                    Console.WriteLine(errorInfo);
-                }
-                else
-                {
-                    Console.WriteLine("喜报: 没报错 ^o^y");
-                    Console.WriteLine("解析结果返回: ");
-                    Console.WriteLine("Token = " + Token);
-                    Console.WriteLine("userId = " + userId);
-                    Console.WriteLine("studentId = " + studentId);
-                    Console.WriteLine("userNickName = " + userNickName);
-                    Console.WriteLine("accountName = " + accountName);
-                    Console.WriteLine("\n================================\n");
-                    (string[] firstExam, string[] secondExam, string Status) = await dongniSDK.getLatest(Token, userId, studentId);
-
-                    Console.WriteLine("开始输出第一个考试信息");
-                    Console.WriteLine("考试名称 = " + firstExam[0]);
-                    Console.WriteLine("考试ID = " + firstExam[1]);
-                    Console.WriteLine("考试类型 = " + firstExam[2]);
-                    Console.WriteLine("考试开始时间 = " + firstExam[3]);
-                    Console.WriteLine("考试结束时间 = " + firstExam[4]);
-                    Console.WriteLine("\n--------------------------------\n");
-                    Console.WriteLine("开始输出第二个考试信息");
-                    Console.WriteLine("考试名称 = " + secondExam[0]);
-                    Console.WriteLine("考试ID = " + secondExam[1]);
-                    Console.WriteLine("考试类型 = " + secondExam[2]);
-                    Console.WriteLine("考试开始时间 = " + secondExam[3]);
-                    Console.WriteLine("考试结束时间 = " + secondExam[4]);
-
-                    Console.WriteLine("\n================================\n");
-                    Console.WriteLine("即将输出考试列表, 开始请求考试列表。");
-                    Console.WriteLine("\n================================\n");
-                    (string[] examName, string[] examId, string[] examType, string[] startDate, string[] endDate) = await dongniSDK.getExamList(Token, userId, studentId, schoolId);
-                    for (int i = 0; i < examName.Length; i++)
-                    {
-                        Console.WriteLine("\n******************************");
-                        Console.WriteLine($"第{i + 1}个考试");
-                        Console.WriteLine($"考试名称(examName): {examName[i]}");
-                        Console.WriteLine($"考试ID(examId): {examId[i]}");
-                        Console.WriteLine($"考试类型(examType): {examType[i]}");
-                        Console.WriteLine($"考试开始时间(startDate): {startDate[i]}");
-                        Console.WriteLine($"考试结束时间(endDate): {endDate[i]}");
-                        Console.WriteLine("******************************");
-                    }
+                    Console.WriteLine("\n******************************");
+                    Console.WriteLine($"第{i + 1}个考试");
+                    Console.WriteLine($"考试名称(examName): {examName[i]}");
+                    Console.WriteLine($"考试ID(examId): {examId[i]}");
+                    Console.WriteLine($"考试类型(examType): {examType[i]}");
+                    Console.WriteLine($"考试开始时间(startDate): {startDate[i]}");
+                    Console.WriteLine($"考试结束时间(endDate): {endDate[i]}");
+                    Console.WriteLine("******************************");
                 }
 
-            }catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 Console.WriteLine("\n******************************\n\n!! ERROR OCCURRED !!\n\n");
                 Console.WriteLine(ex.Message);
