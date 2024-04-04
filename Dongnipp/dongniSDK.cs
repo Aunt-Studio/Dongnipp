@@ -21,6 +21,7 @@ namespace top.nuozhen.Dongnipp
                              __/ |                                               
                             |___/                                                
     Dongni++ SDK
+    V0.0.0 Developing
     Developed by Aunt Studio
     Also see this: https://github.com/Aunt-Studio/Dongnipp
     */
@@ -29,23 +30,22 @@ namespace top.nuozhen.Dongnipp
     {
         private static RSAParameters publicKey; // 全局RSA公钥Parameters
         private static bool debugging;
+        public static string Version = "V0.0.0 Developing";//全局版本号
         /// <summary>
         /// 登录懂你平台，并获取查询需要用的各种参数数据。
-        /// 
+        /// 对于studentId，请使用getRoleInfo()获取。
         /// 
         /// </summary>
         /// <param name="username">用户名 (应该是手机号)</param>
         /// <param name="password">密码</param>
-        /// <returns>返回值 string errorInfo 出现错误则存在返回，无错误(status == 0)返回NULL =_=</returns>
-        public static async Task<(string Token, string userId, string studentId, string userName, string accountName)> login(string username, string password)
+        /// <returns></returns>
+        public static async Task<(string Token, string userId, string userName, string accountName)> login(string username, string password)
         {
             string accountName = null;
             string userName = null;
             string userId = null;
-            string targetStudentId = null;
             string post = null;
             string back = null;
-            string back_stuid = null;
             string aN = null;
             string pw = null;
             string Token = null;
@@ -73,25 +73,15 @@ namespace top.nuozhen.Dongnipp
                     userName = json["data"]["userName"].ToString();
                     userId = json["data"]["userId"].ToString();
 
-                    back_stuid = await GetResponse("https://www.dongni100.com/api/base/data/account/role?clientType=1", Token);
-
-                    JObject json_stuid = JObject.Parse(back_stuid);
-
-                    int lastIndex = json_stuid["data"][0]["userList"].Count() - 1;
-                    targetStudentId = json_stuid["data"][0]["userList"][lastIndex]["studentId"].ToString();
-
-
-                    json_stuid = null;
-
                 }
                 else
                 {
-                    throw new APIException("Coursed by: Status value is not 0.\n\nThe server returned: "+ back);
+                    throw new APIException("Coursed by: Status value is not 0.\n\nThe server returned: " + back);
 
                 }
 
                 json = null;
-                
+
             }
             catch (APIException ex)
             {
@@ -102,7 +92,7 @@ namespace top.nuozhen.Dongnipp
                 ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at Dongnipp.login Method.", ex));
             }
 
-            return (Token, userId, targetStudentId, userName, accountName);
+            return (Token, userId, userName, accountName);
         }
         /// <summary>
         /// 获取最近两次考试信息。
@@ -146,21 +136,25 @@ namespace top.nuozhen.Dongnipp
                 {
                     throw new APIException("Coursed by: Status value is not 0.\n\nThe server returned: " + back);
                 }
-            }catch(APIException ex)
+            }
+            catch (APIException ex)
             {
                 ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at Dongnipp.getLatest Method.", ex));
-            }catch(Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at Dongnipp.getLatest Method.", ex));
             }
             return (firstExam, secondExam);
         }
 
         /// <summary>
-        /// 获取该studentId下所有考试列表(实际为前100个)，以各考试属性数组形式返回。| 通常而言，数组下标越接近于0，则考试时间越接近。
+        /// 获取该studentId下所有考试列表(实际为前100个)，以各考试属性数组形式返回。
+        /// 通常而言，数组下标越接近于0，则考试时间越接近。
         /// </summary>
         /// <param name="Token">登录时获取的用户 Token</param>
         /// <param name="userId">登录时获取的用户 userId</param>
-        /// <param name="studentId">待获取列表的studentId</param>
+        /// <param name="studentId">待获取列表的 studentId</param>
         /// <param name="SchoolId">目标学校schoolId。必须使用getRoleInfo() 获取。</param>
         /// <returns>各考试属性值。以数组形式返回。</returns>
         public static async Task<(string[] examName, string[] examId, string[] examType, string[] startDate, string[] endDate)> getExamList(string Token, string userId, string studentId, string SchoolId)
@@ -203,7 +197,8 @@ namespace top.nuozhen.Dongnipp
                     throw new APIException("Status value is not 0.\n\n The server returned: " + back);
                 }
                 return (List_examName.ToArray(), List_examId.ToArray(), List_examType.ToArray(), List_startDate.ToArray(), List_endDate.ToArray());
-            }catch (APIException ex)
+            }
+            catch (APIException ex)
             {
                 ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at Dongnipp.getExamList Method.", ex));
             }
@@ -211,7 +206,7 @@ namespace top.nuozhen.Dongnipp
             {
                 ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at Dongnipp.getExamList Method.", ex));
             }
-            return (null,null,null,null,null);
+            return (null, null, null, null, null);
 
         }
 
@@ -221,7 +216,7 @@ namespace top.nuozhen.Dongnipp
         /// </summary>
         /// <param name="token">登录时收到的Token</param>
         /// <returns></returns>
-        public static async Task<(string schoolId, string schoolName, string className, string gradeName, string studentName, string classNickname, string userType, string userName)> getRoleInfo(string token, int Sort = 0)
+        public static async Task<(string schoolId, string schoolName, string className, string gradeName, string studentName, string studentId, string classNickname, string userType, string userName)> getRoleInfo(string token, int Sort = 0)
         {
             try
             {
@@ -230,9 +225,11 @@ namespace top.nuozhen.Dongnipp
                 string className = null;
                 string gradeName = null;
                 string studentName = null;
+                string studentId = null;
                 string classNickname = null;
                 string userType = null;
                 string userName = null;
+
                 string URL = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
                 string back = await GetResponse(URL, token);
 
@@ -258,25 +255,25 @@ namespace top.nuozhen.Dongnipp
                             className = (string)user["className"];
                             gradeName = (string)user["gradeName"];
                             studentName = (string)user["studentName"];
+                            studentId = (string)user["studentId"];
                             classNickname = (string)user["nickname"];
                             userType = (string)user["userType"];
                             userName = (string)user["userName"];
-                            
+
                         }
                         else
                         {
                             throw new APIException("Cannot get specified user information.\n\n Server returned: " + back);
-                            
+
                         }
 
                     }
                 }
                 else
                 {
-
                     throw new APIException("Status value is not 0.\n\n The server returned: " + back);
                 }
-                return (schoolId, schoolName, className, gradeName, studentName, classNickname, userType, userName);
+                return (schoolId, schoolName, className, gradeName, studentName, studentId, classNickname, userType, userName);
 
             }
             catch (APIException ex)
@@ -287,11 +284,16 @@ namespace top.nuozhen.Dongnipp
             {
                 ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at Dongnipp.getRole Method.", ex));
             }
-            return (null, null, null, null, null, null, null, null);
+            return (null, null, null, null, null, null, null, null, null);
 
         }
 
-
+        /// <summary>
+        /// 传入懂你的登录Token，向服务器发起GET请求。
+        /// </summary>
+        /// <param name="url">欲发送请求的URL</param>
+        /// <param name="token">登录获取的Token 值，即Header的Dongni-login 值。</param>
+        /// <returns>返回服务器的Response</returns>
         private static async Task<string> GetResponse(string url, string token)
         {
             using (HttpClient client = new HttpClient())
@@ -302,6 +304,13 @@ namespace top.nuozhen.Dongnipp
                 return responseContent;
             }
         }
+        /// <summary>
+        /// 向服务器发起POST请求。用以登录获取Token。
+        /// </summary>
+        /// <param name="url">欲发送请求的URL</param>
+        /// <param name="postData">欲POST的内容</param>
+        /// <param name="contentType">内容类型</param>
+        /// <returns>返回服务器的Response。</returns>
         private static async Task<string> PostRequest(string url, string postData, string contentType)
         {
             using (HttpClient client = new HttpClient())
@@ -312,14 +321,23 @@ namespace top.nuozhen.Dongnipp
                 return responseContent;
             }
         }
-        private static void writeLog(string message,string eventType="INFO",  bool isDebug=false) { 
-            if(isDebug && debugging)
+        /// <summary>
+        /// 写入日志，如果要修改日志的输出方式，请修改这个函数的代码。默认是向控制台输出日志信息。
+        /// </summary>
+        /// <param name="message">欲输出的日志内容</param>
+        /// <param name="eventType">日志信息的类型 (例如INFO、WARNING等)</param>
+        /// <param name="isDebug">是否是Debug类型。如果为true，则仅在全局debugging==true时输出。默认为false。</param>
+        private static void writeLog(string message, string eventType = "INFO", bool isDebug = false)
+        {
+            if (isDebug && debugging)
             {
                 Console.WriteLine($"[Debug / {eventType}] " + message);
-            }else if(!isDebug) { 
-                Console.WriteLine($"[{eventType}]" + message); 
             }
-            
+            else if (!isDebug)
+            {
+                Console.WriteLine($"[{eventType}]" + message);
+            }
+
         }
         /// <summary>
         /// 设置在dongniSDK中是否输出调试信息。
@@ -362,5 +380,6 @@ namespace top.nuozhen.Dongnipp
             {
             }
         }
+
     }
 }
