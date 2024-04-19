@@ -8,6 +8,7 @@ using System.Net;
 using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography;
+using System.Security.Policy;
 
 namespace top.nuozhen.Dongnipp
 {
@@ -216,7 +217,7 @@ namespace top.nuozhen.Dongnipp
         /// </summary>
         /// <param name="token">登录时收到的Token</param>
         /// <returns></returns>
-        public static async Task<(string schoolId, string schoolName, string className, string gradeName, string studentName, string studentId, string classNickname, string userType, string userName)> getRoleInfo(string token, int Sort = 0)
+        public static async Task<(string schoolId, string schoolName, string className, string gradeName, string studentName, string studentId, string classNickname, string userType, string userName)> getRoleInfo(string Token, int Sort = 0)
         {
             try
             {
@@ -231,7 +232,7 @@ namespace top.nuozhen.Dongnipp
                 string userName = null;
 
                 string URL = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
-                string back = await GetResponse(URL, token);
+                string back = await GetResponse(URL, Token);
 
                 writeLog("GettingSchoolInfo Back: " + back, "Server Back", true);
 
@@ -286,6 +287,73 @@ namespace top.nuozhen.Dongnipp
             }
             return (null, null, null, null, null, null, null, null, null);
 
+        }
+
+        /// <summary>
+        /// 获取当前科目的考生得分与该科目总分。也可用于大型考试的多科目总分。
+        /// </summary>
+        /// <param name="Token">登录时获取的用户 Token</param>
+        /// <param name="userId">登录时获取的用户 userId</param>
+        /// <param name="studentId">待查询的角色 studentId</param>
+        /// <param name="examId">待查询的考试 examId</param>
+        /// <param name="schoolId">当前考试所属的学校 schoolId</param>
+        /// <param name="courseId">待查询的科目 courseId。可以不传入或传入空文本, 留空则查询默认科目。在大型考试 (包含"总分"成绩页面) 中留空此参数来查询总分。</param>
+        /// <returns>返回值string Score 为考生取得的分数; string examTotalScore 则为考试该科目的总分值。</returns>
+        public static async Task<(string Score, string examTotalScore)> getScore(string Token, string userId, string studentId, string examId, string schoolId, string courseId = "")
+        {
+            try
+            {
+                Func<Task<string>> getStatId = async () =>
+                {
+                    string stat = "0";
+                    string stat_back = await GetResponse($"https://www.dongni100.com/api/analysis/data/exam/student/weChat/all/examStatId?clientType=1&examId={examId}&schoolId={schoolId}&userId={userId}&studentId={studentId}", Token);
+                    JObject stat_json = JObject.Parse(stat_back);
+                    if (stat_json["status"].ToString() == "0")
+                    {
+                        stat = stat_json["data"]["statId"].ToString();
+                    }
+                    return stat;
+                };
+                string statId = await getStatId();
+                string URL;
+                bool isSpecificCourse = courseId == "";
+                if (isSpecificCourse)
+                { 
+                    URL = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId&examId={examId}&statId={statId}&schoolId={schoolId}&userId={userId}&studentId={studentId}";
+                    string back = await GetResponse(URL, Token);
+
+                    string studentScore = "", examScore = "";
+
+                    JObject json = JObject.Parse(back);
+                    string status = json["status"].ToString();
+
+                    if (status == "0")
+                    {
+                        studentScore = json["data"]["totalScore"].ToString();
+                        examScore = json["data"]["fullMark"].ToString();
+                    }
+                    else
+                    {
+                        throw new APIException("Status value is not 0.\n\n The server returned: " + back);
+                    }
+                    return (studentScore, examScore);
+                }
+                else { 
+                    URL = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/course/scoreSection?clientType=1&courseId={courseId}&examId={examId}&statId={statId}&schoolId={schoolId}&userId={userId}&studentId={studentId}";
+                    //TODO...好困我先睡了zzz
+                }
+
+
+            }
+            catch (APIException ex)
+            {
+                ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at Dongnipp.getScore Method.", ex));
+            }
+            catch (Exception ex)
+            {
+                ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at Dongnipp.getScore Method.", ex));
+            }
+            return ("0", "0");
         }
 
         /// <summary>
