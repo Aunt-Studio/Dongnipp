@@ -30,7 +30,7 @@ namespace top.nuozhen.Dongnipp
     internal class dongniSDK
     {
         private static RSAParameters publicKey; // 全局RSA公钥Parameters
-        private static bool debugging;
+        public static bool debugging;
         public static string Version = "V0.0.0 Developing";//全局版本号
         /// <summary>
         /// 登录懂你平台，并获取查询需要用的各种参数数据。
@@ -242,33 +242,37 @@ namespace top.nuozhen.Dongnipp
 
                 if (status == "0")
                 {
+                    JObject selectedUser = null;
 
-                    foreach (JObject user in userList)
+                    foreach (JObject user in userList.Cast<JObject>())
                     {
                         if ((int)user["userSort"] == Sort)
                         {
-                            JObject selectedUser = user;
+                            selectedUser = user;
+                            break;
                         }
-                        if (user != null)
-                        {
-                            schoolId = (string)user["schoolId"];
-                            schoolName = (string)user["schoolName"];
-                            className = (string)user["className"];
-                            gradeName = (string)user["gradeName"];
-                            studentName = (string)user["studentName"];
-                            studentId = (string)user["studentId"];
-                            classNickname = (string)user["nickname"];
-                            userType = (string)user["userType"];
-                            userName = (string)user["userName"];
+                    }
 
-                        }
-                        else
-                        {
-                            throw new APIException("Cannot get specified user information.\n\n Server returned: " + back);
-
-                        }
+                    if (selectedUser != null)
+                    {
+                        schoolId = (string)selectedUser["schoolId"];
+                        schoolName = (string)selectedUser["schoolName"];
+                        className = (string)selectedUser["className"];
+                        gradeName = (string)selectedUser["gradeName"];
+                        studentName = (string)selectedUser["studentName"];
+                        studentId = (string)selectedUser["studentId"];
+                        classNickname = (string)selectedUser["nickname"];
+                        userType = (string)selectedUser["userType"];
+                        userName = (string)selectedUser["userName"];
 
                     }
+                    else
+                    {
+                        throw new APIException("Cannot get specified user information.\n\n Server returned: " + back);
+
+                    }
+
+                    
                 }
                 else
                 {
@@ -298,8 +302,8 @@ namespace top.nuozhen.Dongnipp
         /// <param name="examId">待查询的考试 examId</param>
         /// <param name="schoolId">当前考试所属的学校 schoolId</param>
         /// <param name="courseId">待查询的科目 courseId。可以不传入或传入空文本, 留空则查询默认科目。在大型考试 (包含"总分"成绩页面) 中留空此参数来查询总分。</param>
-        /// <returns>返回值string Score 为考生取得的分数; string examTotalScore 则为考试该科目的总分值。</returns>
-        public static async Task<(string Score, string examTotalScore)> getScore(string Token, string userId, string studentId, string examId, string schoolId, string courseId = "")
+        /// <returns>返回值string[] Score 为考生取得的分数; string[] examTotalScore 则为考试该科目的总分值, string[] courseName 则为当前数组索引对应的科目名称。各数组索引均为传入的courseId从小到大的排序次序。例如传入courseId:"4,6,10"，则各返回值的数组索引[0], [1], [2]分别对应着courseId = 4, courseId = 6, courseId = 10 的属性值。</returns>
+        public static async Task<(string[] courseName, string[] Score, string[] examTotalScore)> getScore(string Token, string userId, string studentId, string examId, string schoolId, string courseId = "")
         {
             try
             {
@@ -318,7 +322,8 @@ namespace top.nuozhen.Dongnipp
                 string URL;
                 bool isSpecificCourse = courseId == "";
                 if (isSpecificCourse)
-                { 
+                {
+                    writeLog("无指定科目输入，将直接获取非分科信息。", isDebug: true);
                     URL = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId&examId={examId}&statId={statId}&schoolId={schoolId}&userId={userId}&studentId={studentId}";
                     string back = await GetResponse(URL, Token);
 
@@ -336,11 +341,44 @@ namespace top.nuozhen.Dongnipp
                     {
                         throw new APIException("Status value is not 0.\n\n The server returned: " + back);
                     }
-                    return (studentScore, examScore);
+                    return (new string[] {"总分"}, new string[] { studentScore }, new string[] { examScore });    //Note: 这里可以改一下，等到getCourseName()方法写好后应该用courseId查询科目名称的。
                 }
-                else { 
-                    URL = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/course/scoreSection?clientType=1&courseId={courseId}&examId={examId}&statId={statId}&schoolId={schoolId}&userId={userId}&studentId={studentId}";
-                    //TODO...好困我先睡了zzz
+                else {
+                    writeLog("存在指定科目输入，将获取全科成绩后分科解析。", isDebug:true);
+
+                    List<string> courseNames = new List<string>();  //初始化科目名称列表，列表按照科目CourseId从小到大索引。
+                    List<string> Score = new List<string>();   //初始化分数列表，列表按照科目CourseId从小到大索引。
+                    List<string> examTotalScore = new List<string>();   //初始化分数列表，列表按照科目CourseId从小到大索引。
+
+                    string[] Splited_courseId = courseId.Split(',');
+                    int[] SelectedCourseId = Array.ConvertAll(Splited_courseId, int.Parse);
+                    Array.Sort(SelectedCourseId);   //为选定的CourseId排序。
+                    for(int i = 0; i < SelectedCourseId.Length; i++)
+                    {
+                        writeLog($"已确认选定的CourseID: {SelectedCourseId[i]}", isDebug: true);
+                    }
+
+                    writeLog($"开始解析...", isDebug:true);
+
+                    for(int i = 0; i < SelectedCourseId.Length; i++) {
+                        URL = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/course/scoreSection?clientType=1&courseId={SelectedCourseId[i]}&examId={examId}&statId={statId}&schoolId={schoolId}&userId={userId}&studentId={studentId}";
+                        string back = await GetResponse(URL, Token);
+                        JObject json = JObject.Parse(back);
+                        string status = json["status"].ToString();
+
+                        if (status == "0")
+                        {
+                            courseNames.Add((string)json["data"][0]["courseName"]);
+                            Score.Add((string)json["data"][0]["totalScore"]);
+                            examTotalScore.Add((string)json["data"][0]["fullMark"]);
+                        }
+                        else
+                        {
+                            throw new APIException($"Status value is not 0.\n\nAt CourseId = {SelectedCourseId[i]} \n\nThe server returned: " + back);
+                        }
+                        
+                    }
+                    return (courseNames.ToArray(), Score.ToArray(), examTotalScore.ToArray());
                 }
 
 
@@ -353,7 +391,7 @@ namespace top.nuozhen.Dongnipp
             {
                 ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at Dongnipp.getScore Method.", ex));
             }
-            return ("0", "0");
+            return (new string[] { "获取失败" }, new string[] { "0" }, new string[] { "0" });
         }
 
         /// <summary>

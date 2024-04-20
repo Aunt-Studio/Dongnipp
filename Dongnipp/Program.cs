@@ -32,6 +32,10 @@ namespace top.nuozhen.Dongnipp.test
             Console.WriteLine("\r\n  _____                          _             \r\n |  __ \\                        (_)  _     _   \r\n | |  | | ___  _ __   __ _ _ __  _ _| |_ _| |_ \r\n | |  | |/ _ \\| '_ \\ / _` | '_ \\| |_   _|_   _|\r\n | |__| | (_) | | | | (_| | | | | | |_|   |_|  \r\n |_____/ \\___/|_| |_|\\__, |_| |_|_|            \r\n                      __/ |                    \r\n                     |___/                     \r\n");
             Console.WriteLine();
             Console.WriteLine("Dongni++ SDK 版本号: " + dongniSDK.Version);
+            if (dongniSDK.debugging)
+            {
+                Console.WriteLine("[Warning] 已启用全局调试模式，将可能输出服务器原始返回信息，请注意隐私保护。");
+            }
             Console.WriteLine();
             Console.WriteLine("请输入UserName:");
             string userName = Console.ReadLine();
@@ -93,9 +97,16 @@ namespace top.nuozhen.Dongnipp.test
             Console.WriteLine("\n请输入欲查询科目的courseId (以半角逗号分割, 留空则代表取得默认科目或者全科总分):");
             string score_courseId = Console.ReadLine();
             Console.WriteLine("\n开始查询....");
-            (string score_stuScore, string score_exScore) = await dongniSDK.getScore(Token, userId, studentId, score_examId, schoolId, score_courseId);
-            Console.WriteLine("本科目总分: " + score_exScore);
-            Console.WriteLine("学生取得总分: " + score_stuScore);
+            (string[] score_courseName, string[] score_stuScore, string[] score_exScore) = await dongniSDK.getScore(Token, userId, studentId, score_examId, schoolId, score_courseId);
+            for(int i = 0; i< score_courseName.Length; i++)
+            {
+                Console.WriteLine("\n*********************");
+                Console.WriteLine("科目: " + score_courseName[i]);
+                Console.WriteLine("本科目总分: " + score_exScore[i]);
+                Console.WriteLine("学生取得总分: " + score_stuScore[i]);
+                Console.WriteLine("*********************\n");
+            }
+            
             Console.WriteLine("\n-------------分数查询-------------");
             await Task.Delay(100000);
             
