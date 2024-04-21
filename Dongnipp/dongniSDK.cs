@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -294,14 +294,14 @@ namespace top.nuozhen.Dongnipp
         }
 
         /// <summary>
-        /// 获取当前科目的考生得分与该科目总分。也可用于大型考试的多科目总分。
+        /// 获取当前科目的考生得分与该科目总分。也可用于直接查询该场考试全科总分或一次性查询多科目分数。
         /// </summary>
         /// <param name="Token">登录时获取的用户 Token</param>
         /// <param name="userId">登录时获取的用户 userId</param>
         /// <param name="studentId">待查询的角色 studentId</param>
         /// <param name="examId">待查询的考试 examId</param>
         /// <param name="schoolId">当前考试所属的学校 schoolId</param>
-        /// <param name="courseId">待查询的科目 courseId。可以不传入或传入空文本, 留空则查询默认科目。在大型考试 (包含"总分"成绩页面) 中留空此参数来查询总分。</param>
+        /// <param name="courseId">待查询的科目 courseId，多个科目使用半角逗号分隔。可以不传入或传入空文本以查询该场考试的全科目总分。</param>
         /// <returns>返回值string[] Score 为考生取得的分数; string[] examTotalScore 则为考试该科目的总分值, string[] courseName 则为当前数组索引对应的科目名称。各数组索引均为传入的courseId从小到大的排序次序。例如传入courseId:"4,6,10"，则各返回值的数组索引[0], [1], [2]分别对应着courseId = 4, courseId = 6, courseId = 10 的属性值。</returns>
         public static async Task<(string[] courseName, string[] Score, string[] examTotalScore)> getScore(string Token, string userId, string studentId, string examId, string schoolId, string courseId = "")
         {
