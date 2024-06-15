@@ -37,7 +37,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="dongniSDK.cs" />
+    <Compile Include="DongnippSDK.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="RSAUtils.cs" />
   </ItemGroup>
