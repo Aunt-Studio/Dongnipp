@@ -31,20 +31,28 @@ namespace top.nuozhen.Dongnipp
     {
         public static bool debugging;
         public static string Version = "V0.0.0 Developing";//全局版本号
+
         class DongniUser
         {
-            public string accountName { get; private set; }
-            public string token { get; private set; }
-            public string nickName { get; private set; }
-            public string userId { get; private set; }
+            public string AccountName { get; private set; }
+            public string Token { get; private set; }
+            public string NickName { get; private set; }
+            public string UserId { get; private set; }
             private bool isLogon;
 
+            /// <summary>
+            /// DongniUser 的构造函数，不应被外部直接调用，创建DongniUser 实例请使用Login()异步工厂方法。
+            /// </summary>
+            /// <param name="accountName"></param>
+            /// <param name="token"></param>
+            /// <param name="nickName"></param>
+            /// <param name="userId"></param>
             private DongniUser(string accountName, string token, string nickName, string userId)
             {
-                this.accountName = accountName;
-                this.token = token;
-                this.nickName = nickName;
-                this.userId = userId;
+                this.AccountName = accountName;
+                this.Token = token;
+                this.NickName = nickName;
+                this.UserId = userId;
             }
 
             public static async Task<DongniUser> Login(string userName, string password)
@@ -69,7 +77,7 @@ namespace top.nuozhen.Dongnipp
                     postContent = "{\"accountName\":\"" + encUserName + "\",\"password\":\"" + encPassword + "\",\"validate\":null,\"userId\":null,\"clientType\":1}";
                     serverResponse = await PostRequest("https://www.dongni100.com/api/base/data/encrypt/login", postContent, "application/json");
 
-                    writeLog("DongniUser.Login() | Server Resopnse: " + serverResponse, "Server Response", true);
+                    WriteLog("DongniUser.Login() | Server Resopnse: " + serverResponse, "Server Response", true);
 
                     JObject json = JObject.Parse(serverResponse);
                     string status = json["status"].ToString();
@@ -103,57 +111,60 @@ namespace top.nuozhen.Dongnipp
                 }
                 return null;
             }
+
+            
+
         }
 
         class DongniRole
         {
-            public DongniUser user { get; private set; }
-            public string classId { get; private set; }
-            public string className { get; private set; }
-            public string gradeId { get; private set; }
-            public string gradeName { get; private set; }
-            public string relativeId { get; private set; }
-            public string schoolId { get; private set; }
-            public string schoolName { get; private set; }
-            public string studentId { get; private set; }
-            public string studentName { get; private set; }
-            public string userType { get; private set; }
+            public DongniUser User { get; private set; }
+            public string ClassId { get; private set; }
+            public string ClassName { get; private set; }
+            public string GradeId { get; private set; }
+            public string GradeName { get; private set; }
+            public string RelativeId { get; private set; }
+            public string SchoolId { get; private set; }
+            public string SchoolName { get; private set; }
+            public string StudentId { get; private set; }
+            public string StudentName { get; private set; }
+            public string UserType { get; private set; }
 
             public DongniRole(DongniUser user, string classId, string className, string gradeId, string gradeName, string relativeId, string schoolId, string schoolName, string studentId, string studentName, string userType)
             {
-                this.user = user;
-                this.classId = classId;
-                this.className = className;
-                this.gradeId = gradeId;
-                this.gradeName = gradeName;
-                this.relativeId = relativeId;
-                this.schoolId = schoolId;
-                this.schoolName = schoolName;
-                this.studentId = studentId;
-                this.studentName = studentName;
-                this.userType = userType;
+                this.User = user;
+                this.ClassId = classId;
+                this.ClassName = className;
+                this.GradeId = gradeId;
+                this.GradeName = gradeName;
+                this.RelativeId = relativeId;
+                this.SchoolId = schoolId;
+                this.SchoolName = schoolName;
+                this.StudentId = studentId;
+                this.StudentName = studentName;
+                this.UserType = userType;
             }
         }
 
         class DongniExam
         {
-            public DongniRole role { get; private set; }
-            public string examId { get; private set; }
-            public string examName { get; private set; }
-            public string examType { get; private set; }
-            public string startDate { get; private set; }
-            public string endDate { get; private set; }
-            public string defaultStatId { get; private set; }
+            public DongniRole Role { get; private set; }
+            public string ExamId { get; private set; }
+            public string ExamName { get; private set; }
+            public string ExamType { get; private set; }
+            public string StartDate { get; private set; }
+            public string EndDate { get; private set; }
+            public string DefaultStatId { get; private set; }
 
             public DongniExam(DongniRole role, string examId, string examName, string examType, string startDate, string endDate, string defaultStatId)
             {
-                this.role = role;
-                this.examId = examId;
-                this.examName = examName;
-                this.examType = examType;
-                this.startDate = startDate;
-                this.endDate = endDate;
-                this.defaultStatId = defaultStatId;
+                this.Role = role;
+                this.ExamId = examId;
+                this.ExamName = examName;
+                this.ExamType = examType;
+                this.StartDate = startDate;
+                this.EndDate = endDate;
+                this.DefaultStatId = defaultStatId;
             }
 
 
@@ -218,7 +229,7 @@ namespace top.nuozhen.Dongnipp
         /// <param name="message">欲输出的日志内容</param>
         /// <param name="eventType">日志信息的类型 (例如INFO、WARNING等, 默认为INFO)</param>
         /// <param name="isDebug">是否是Debug类型。如果为true，则仅在全局debugging == true时输出。默认为false。</param>
-        private static void writeLog(string message, string eventType = "INFO", bool isDebug = false)
+        private static void WriteLog(string message, string eventType = "INFO", bool isDebug = false)
         {
             if (isDebug && debugging)
             {
@@ -234,7 +245,7 @@ namespace top.nuozhen.Dongnipp
         /// 设置在dongniSDK中是否输出调试信息。
         /// </summary>
         /// <param name="debug">true为全局输出调试日志，反之不输出。</param>
-        public static void setDebug(bool debug)
+        public static void SetDebug(bool debug)
         {
             debugging = debug;
         }
