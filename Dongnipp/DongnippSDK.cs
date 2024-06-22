@@ -80,9 +80,9 @@ namespace top.nuozhen.Dongnipp
                     WriteLog("DongniUser.Login() | Server Resopnse: " + serverResponse, "Server Response", true);
 
                     JObject json = JObject.Parse(serverResponse);
-                    string status = json["status"].ToString();
+                    
 
-                    if (status == "0")
+                    if (json["status"].ToString() == "0")
                     {
                         token = json["data"]["dongniLoginToken"].ToString();
                         accountName = json["data"]["accountName"].ToString();
@@ -92,18 +92,18 @@ namespace top.nuozhen.Dongnipp
                     }
                     else
                     {
-                        throw new APIException("Coursed by: Status value is not 0.\n\nThe server responsed: " + serverResponse);
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + serverResponse);
 
                     }
 
                 }
                 catch (APIException ex)
                 {
-                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at Dongnipp.login Method.", ex));
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniUser.Login Method.", ex));
                 }
                 catch (Exception ex)
                 {
-                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at Dongnipp.login Method.", ex));
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.Login Method.", ex));
                 }
                 if (accountName != string.Empty && token != string.Empty && nickName != string.Empty && userId != string.Empty)
                 {
@@ -112,13 +112,68 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
-            
+            public async Task<DongniRole[]> ListRole()
+            {
+                string url = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
+                string response = await GetResponse(url, Token);
+                WriteLog("DongniUser.ListRole | RSRR :" + response, isDebug: true);
+                
+                WriteLog("Trying to parse...",isDebug: true);
+                try
+                {
+                    JObject json = JObject.Parse(response);
+
+                    if (json["status"].ToString() == "0")
+                    {
+                        List<DongniRole> roles = new List<DongniRole>();
+
+                        foreach (var account in json["data"])
+                        {
+                            foreach (var user in account["userList"])
+                            {
+                                DongniRole role = new DongniRole(
+                                    this,
+                                    user["userSort"].ToString(),
+                                    user["classId"].ToString(),
+                                    user["className"].ToString(),
+                                    user["gradeId"].ToString(),
+                                    user["gradeName"].ToString(),
+                                    user["relativeId"].ToString(),
+                                    user["schoolId"].ToString(),
+                                    user["schoolName"].ToString(),
+                                    user["studentId"].ToString(),
+                                    user["studentName"].ToString(),
+                                    user["userType"].ToString()
+                                );
+
+                                roles.Add(role);
+                                WriteLog($"Already parsed {roles.Count} roles.", isDebug: true);
+                            }
+                        }
+                        return (roles.ToArray());
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniUser.ListRole Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.ListRole Method.", ex));
+                }
+                return null;
+            }
 
         }
 
         class DongniRole
         {
             public DongniUser User { get; }
+            public string RoleSort { get; }
             public string ClassId { get; }
             public string ClassName { get; }
             public string GradeId { get; }
@@ -130,9 +185,10 @@ namespace top.nuozhen.Dongnipp
             public string StudentName { get; }
             public string UserType { get; }
 
-            public DongniRole(DongniUser user, string classId, string className, string gradeId, string gradeName, string relativeId, string schoolId, string schoolName, string studentId, string studentName, string userType)
+            public DongniRole(DongniUser user, string roleSort, string classId, string className, string gradeId, string gradeName, string relativeId, string schoolId, string schoolName, string studentId, string studentName, string userType)
             {
                 this.User = user;
+                this.RoleSort = roleSort;
                 this.ClassId = classId;
                 this.ClassName = className;
                 this.GradeId = gradeId;
