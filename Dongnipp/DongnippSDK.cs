@@ -38,7 +38,7 @@ namespace top.nuozhen.Dongnipp
             public string Token { get; private set; }
             public string NickName { get; private set; }
             public string UserId { get; private set; }
-            private bool isLogon;
+            public bool IsLogon { get; private set; }
 
             /// <summary>
             /// DongniUser 的构造函数，不应被外部直接调用，创建DongniUser 实例请使用Login()异步工厂方法。
@@ -118,17 +118,17 @@ namespace top.nuozhen.Dongnipp
 
         class DongniRole
         {
-            public DongniUser User { get; private set; }
-            public string ClassId { get; private set; }
-            public string ClassName { get; private set; }
-            public string GradeId { get; private set; }
-            public string GradeName { get; private set; }
-            public string RelativeId { get; private set; }
-            public string SchoolId { get; private set; }
-            public string SchoolName { get; private set; }
-            public string StudentId { get; private set; }
-            public string StudentName { get; private set; }
-            public string UserType { get; private set; }
+            public DongniUser User { get; }
+            public string ClassId { get; }
+            public string ClassName { get; }
+            public string GradeId { get; }
+            public string GradeName { get; }
+            public string RelativeId { get; }
+            public string SchoolId { get; }
+            public string SchoolName { get; }
+            public string StudentId { get; }
+            public string StudentName { get; }
+            public string UserType { get; }
 
             public DongniRole(DongniUser user, string classId, string className, string gradeId, string gradeName, string relativeId, string schoolId, string schoolName, string studentId, string studentName, string userType)
             {
@@ -148,13 +148,13 @@ namespace top.nuozhen.Dongnipp
 
         class DongniExam
         {
-            public DongniRole Role { get; private set; }
-            public string ExamId { get; private set; }
-            public string ExamName { get; private set; }
-            public string ExamType { get; private set; }
-            public string StartDate { get; private set; }
-            public string EndDate { get; private set; }
-            public string DefaultStatId { get; private set; }
+            public DongniRole Role { get; }
+            public string ExamId { get;  }
+            public string ExamName { get; }
+            public string ExamType { get; }
+            public string StartDate { get; }
+            public string EndDate { get; }
+            public string DefaultStatId { get; }
 
             public DongniExam(DongniRole role, string examId, string examName, string examType, string startDate, string endDate, string defaultStatId)
             {
