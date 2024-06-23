@@ -116,9 +116,9 @@ namespace top.nuozhen.Dongnipp
             {
                 string url = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
                 string response = await GetResponse(url, Token);
-                WriteLog("DongniUser.ListRole | RSRR :" + response, isDebug: true);
+                WriteLog("DongniUser.ListRole | RSRR: " + response, isDebug: true);
                 
-                WriteLog("Trying to parse...",isDebug: true);
+                WriteLog("DongniUser.ListRole: Trying to parse...", isDebug: true);
                 try
                 {
                     JObject json = JObject.Parse(response);
@@ -147,7 +147,7 @@ namespace top.nuozhen.Dongnipp
                                 );
 
                                 roles.Add(role);
-                                WriteLog($"Already parsed {roles.Count} roles.", isDebug: true);
+                                WriteLog($"DongniUser.ListRole: Already parsed {roles.Count} roles.", isDebug: true);
                             }
                         }
                         return (roles.ToArray());
@@ -168,6 +168,137 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            public async Task<DongniRole> SelectRole(int roleSort)
+            {
+                string url = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
+                string response = await GetResponse(url, Token);
+                WriteLog("DongniUser.SelectRole | RSRR: " + response, isDebug: true);
+
+                WriteLog("DongniUser.ListRole: Trying to parse...", isDebug: true);
+                try
+                {
+                    JObject json = JObject.Parse(response);
+
+
+                    if (json["status"].ToString() == "0")
+                    {
+                        JObject selectedUser = null;
+                        JArray userList = (JArray)json["data"][0]["userList"];
+
+                        foreach (JObject user in userList.Cast<JObject>())
+                        {
+                            if ((int)user["userSort"] == roleSort)
+                            {
+                                selectedUser = user;
+                                break;
+                            }
+                        }
+                        if (selectedUser != null)
+                        {
+                            DongniRole role = new DongniRole(
+                                this,
+                                selectedUser["userSort"].ToString(),
+                                selectedUser["classId"].ToString(),
+                                selectedUser["className"].ToString(),
+                                selectedUser["gradeId"].ToString(),
+                                selectedUser["gradeName"].ToString(),
+                                selectedUser["relativeId"].ToString(),
+                                selectedUser["schoolId"].ToString(),
+                                selectedUser["schoolName"].ToString(),
+                                selectedUser["studentId"].ToString(),
+                                selectedUser["studentName"].ToString(),
+                                selectedUser["userType"].ToString()
+                            );
+
+                            return role;
+                        }
+                        else
+                        {
+                            throw new APIException("Coursed by: Cannot get specified user information.\n\nRemote server responsed: " + response);
+
+                        }
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniUser.SelectRole Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.SelectRole Method.", ex));
+                }
+                return null;
+            }
+
+            public async Task<DongniRole> SelectRole(string roleSort)
+            {
+                string url = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
+                string response = await GetResponse(url, Token);
+                WriteLog("DongniUser.SelectRole | RSRR: " + response, isDebug: true);
+
+                WriteLog("DongniUser.ListRole: Trying to parse...", isDebug: true);
+                try
+                {
+                    JObject json = JObject.Parse(response);
+
+
+                    if (json["status"].ToString() == "0")
+                    {
+                        JObject selectedUser = null;
+                        JArray userList = (JArray)json["data"][0]["userList"];
+
+                        foreach (JObject user in userList.Cast<JObject>())
+                        {
+                            if ((string)user["userSort"] == roleSort)
+                            {
+                                selectedUser = user;
+                                break;
+                            }
+                        }
+                        if (selectedUser != null)
+                        {
+                            DongniRole role = new DongniRole(
+                                this,
+                                selectedUser["userSort"].ToString(),
+                                selectedUser["classId"].ToString(),
+                                selectedUser["className"].ToString(),
+                                selectedUser["gradeId"].ToString(),
+                                selectedUser["gradeName"].ToString(),
+                                selectedUser["relativeId"].ToString(),
+                                selectedUser["schoolId"].ToString(),
+                                selectedUser["schoolName"].ToString(),
+                                selectedUser["studentId"].ToString(),
+                                selectedUser["studentName"].ToString(),
+                                selectedUser["userType"].ToString()
+                            );
+
+                            return role;
+                        }
+                        else
+                        {
+                            throw new APIException("Coursed by: Cannot get specified user information.\n\nRemote server responsed: " + response);
+
+                        }
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniUser.SelectRole Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.SelectRole Method.", ex));
+                }
+                return null;
+            }
         }
 
         class DongniRole
