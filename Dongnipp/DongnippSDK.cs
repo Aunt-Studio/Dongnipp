@@ -32,7 +32,7 @@ namespace top.nuozhen.Dongnipp
         public static bool debugging;
         public static string Version = "V0.0.0 Developing";//全局版本号
 
-        class DongniUser
+        public class DongniUser
         {
             public string AccountName { get; private set; }
             public string Token { get; private set; }
@@ -301,7 +301,7 @@ namespace top.nuozhen.Dongnipp
             }
         }
 
-        class DongniRole
+        public class DongniRole
         {
             public DongniUser User { get; }
             public string RoleSort { get; }
@@ -333,7 +333,7 @@ namespace top.nuozhen.Dongnipp
             }
         }
 
-        class DongniExam
+        public class DongniExam
         {
             public DongniRole Role { get; }
             public string ExamId { get;  }
