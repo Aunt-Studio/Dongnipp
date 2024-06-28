@@ -79,7 +79,7 @@ namespace top.nuozhen.Dongnipp
                     postContent = "{\"accountName\":\"" + encUserName + "\",\"password\":\"" + encPassword + "\",\"validate\":null,\"userId\":null,\"clientType\":1}";
                     serverResponse = await PostRequest("https://www.dongni100.com/api/base/data/encrypt/login", postContent, "application/json");
 
-                    WriteLog("DongniUser.Login() | Server Resopnse: " + serverResponse, "Server Response", true);
+                    WriteLog("DongniUser.Login | RSRR: " + serverResponse, isDebug: true);
 
                     JObject json = JObject.Parse(serverResponse);
                     
