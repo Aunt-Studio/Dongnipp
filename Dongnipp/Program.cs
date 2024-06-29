@@ -67,7 +67,7 @@ namespace top.nuozhen.Dongnipp.test
             }
             Console.WriteLine("请输入角色头部的序号以选择角色: ");
             int roleSort = int.Parse(Console.ReadLine());
-            DongnippSDK.DongniRole currentRole = userRoles[roleSort];
+            DongnippSDK.DongniRole currentRole = await dongniUser.SelectRole(roleSort);
             Console.WriteLine($"\n已选择角色:  {currentRole.StudentId}");
             //Console.WriteLine("\n================================\n");
             //Console.WriteLine("开始输出第一个考试信息");

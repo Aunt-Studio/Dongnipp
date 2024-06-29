@@ -4,11 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using System.Net;
-using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography;
-using System.Security.Policy;
 
 namespace top.nuozhen.Dongnipp
 {
@@ -300,6 +297,33 @@ namespace top.nuozhen.Dongnipp
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.SelectRole Method.", ex));
                 }
                 return null;
+            }
+
+            public DongniRole SelectRole(DongniRole[] roleArrow, int roleSort)
+            {
+                try
+                {
+                    if (roleSort >= roleArrow.Length)
+                    {
+                        throw new APIException($"Coursed by: The role object pointed to by the passed parameter \"roleSort\" is out of the array index range of \"roleArrow\".\nroleArrow.length = {roleArrow.Length} \n roleSort = {roleSort}");
+                    }
+                    return roleArrow[roleSort];
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniUser.SelectRole Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.SelectRole Method.", ex));
+                }
+                return null;
+            }
+
+            public DongniRole SelectRole(DongniRole[] roleArrow, string roleSort)
+            {
+                int sort = int.Parse(roleSort);
+                return SelectRole(roleArrow, sort);
             }
         }
 
