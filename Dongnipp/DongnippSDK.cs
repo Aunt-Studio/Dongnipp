@@ -401,11 +401,11 @@ namespace top.nuozhen.Dongnipp
                         WriteLog("DongniRole.GetLatest: Parsed 1st exam.", isDebug: true);
                         DongniExam secondExam = new DongniExam(
                             this,
-                            (string)json["data"][0]["examId"],
-                            (string)json["data"][0]["examName"],
-                            (string)json["data"][0]["examType"],
-                            (string)json["data"][0]["startDate"],
-                            (string)json["data"][0]["endDate"]
+                            (string)json["data"][1]["examId"],
+                            (string)json["data"][1]["examName"],
+                            (string)json["data"][1]["examType"],
+                            (string)json["data"][1]["startDate"],
+                            (string)json["data"][1]["endDate"]
                             );
                         WriteLog("DongniRole.GetLatest: Parsed 2st exam.", isDebug: true);
 
