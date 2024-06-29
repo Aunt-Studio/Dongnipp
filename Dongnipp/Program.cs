@@ -43,11 +43,8 @@ namespace top.nuozhen.Dongnipp.test
             Console.WriteLine("\n\nLogin...");
             DongnippSDK.DongniUser dongniUser = await DongnippSDK.DongniUser.Login(userName, pwd);
             Console.WriteLine("\n================================\n");
-            Console.WriteLine("登录结果: ");
-            Console.WriteLine("Token = " + dongniUser.Token);
-            Console.WriteLine("UserId = " + dongniUser.UserId);
-            Console.WriteLine("NickName = " + dongniUser.NickName);
-            Console.WriteLine("AccountName = " + dongniUser.AccountName);
+            Console.WriteLine("登录返回用户: ");
+            Console.WriteLine(dongniUser.ToString());
             Console.WriteLine("\n================================\n");
             Console.WriteLine("正在列表角色: \n\n");
             DongnippSDK.DongniRole[] userRoles = await dongniUser.ListRole();
@@ -69,22 +66,23 @@ namespace top.nuozhen.Dongnipp.test
             int roleSort = int.Parse(Console.ReadLine());
             DongnippSDK.DongniRole currentRole = await dongniUser.SelectRole(roleSort);
             Console.WriteLine($"\n已选择角色:  {currentRole.StudentId}");
-            //Console.WriteLine("\n================================\n");
-            //Console.WriteLine("开始输出第一个考试信息");
-            //Console.WriteLine("考试名称 = " + firstExam[0]);
-            //Console.WriteLine("考试ID = " + firstExam[1]);
-            //Console.WriteLine("考试类型 = " + firstExam[2]);
-            //Console.WriteLine("考试开始时间 = " + firstExam[3]);
-            //Console.WriteLine("考试结束时间 = " + firstExam[4]);
-            //Console.WriteLine("\n--------------------------------\n");
-            //Console.WriteLine("开始输出第二个考试信息");
-            //Console.WriteLine("考试名称 = " + secondExam[0]);
-            //Console.WriteLine("考试ID = " + secondExam[1]);
-            //Console.WriteLine("考试类型 = " + secondExam[2]);
-            //Console.WriteLine("考试开始时间 = " + secondExam[3]);
-            //Console.WriteLine("考试结束时间 = " + secondExam[4]);
-
-            //Console.WriteLine("\n================================\n");
+            Console.WriteLine("开始请求最近两场考试信息");
+            DongnippSDK.DongniExam[] latestExams = await currentRole.GetLatest();
+            Console.WriteLine("\n================================\n");
+            Console.WriteLine("开始输出第一个考试信息");
+            Console.WriteLine("考试名称 (examName) = " + latestExams[0].ExamName);
+            Console.WriteLine("考试ID (examId) = " + latestExams[0].ExamId);
+            Console.WriteLine("考试类型 (examType) = " + latestExams[0].ExamType);
+            Console.WriteLine("考试开始时间 (startDate) = " + latestExams[0].StartDate);
+            Console.WriteLine("考试结束时间 (endDate) = " + latestExams[0].EndDate);
+            Console.WriteLine("\n--------------------------------\n");
+            Console.WriteLine("开始输出第二个考试信息");
+            Console.WriteLine("考试名称 (examName) = " + latestExams[1].ExamName);
+            Console.WriteLine("考试ID = (examId) " + latestExams[1].ExamId);
+            Console.WriteLine("考试类型 (examType) = " + latestExams[1].ExamType);
+            Console.WriteLine("考试开始时间 (startDate) = " + latestExams[1].StartDate);
+            Console.WriteLine("考试结束时间 (endDate) = " + latestExams[1].EndDate);
+            Console.WriteLine("\n================================\n");
             //Console.WriteLine("即将输出考试列表, 开始请求考试列表。");
             //Console.WriteLine("\n================================\n");
             //(string[] examName, string[] examId, string[] examType, string[] startDate, string[] endDate) = await dongniSDK.getExamList(Token, userId, studentId, schoolId);
@@ -117,7 +115,7 @@ namespace top.nuozhen.Dongnipp.test
             //    Console.WriteLine("学生取得总分: " + score_stuScore[i]);
             //    Console.WriteLine("*********************\n");
             //}
-            
+
             //Console.WriteLine("\n-------------分数查询-------------");
             await Task.Delay(100000);
             

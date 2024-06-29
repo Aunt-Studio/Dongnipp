@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
+using System.Reflection;
 
 namespace top.nuozhen.Dongnipp
 {
@@ -33,11 +34,10 @@ namespace top.nuozhen.Dongnipp
         {
             private const string PublicKey = "-----BEGIN PUBLIC KEY-----MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCphVCsMh1khU8W0l1WBu0RHTprNr+e2iO0+lLdx+I0tAzCj7jdr5h+tcqZazFuwa751wuegYb0XDbm+/Ti7mWH/Etm+Qc9c5+dBZGzEH0zH8f1cV8EfU8qcsNtn/ixAS7HDl0nzhzlATmH8iFa3l2dYoMBxUZV6Bpyj+gSWg+Y5QIDAQAB-----END PUBLIC KEY-----";
 
-            public string AccountName { get; private set; }
-            public string Token { get; private set; }
-            public string NickName { get; private set; }
-            public string UserId { get; private set; }
-            public bool IsLogon { get; private set; }
+            public string AccountName { get; }
+            public string Token { get; }
+            public string NickName { get; }
+            public string UserId { get; }
 
             /// <summary>
             /// DongniUser 的构造函数，不应被外部直接调用，创建DongniUser 实例请使用Login()异步工厂方法。
@@ -113,13 +113,14 @@ namespace top.nuozhen.Dongnipp
 
             public async Task<DongniRole[]> ListRole()
             {
-                string url = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
-                string response = await GetResponse(url, Token);
-                WriteLog("DongniUser.ListRole | RSRR: " + response, isDebug: true);
-                
-                WriteLog("DongniUser.ListRole: Trying to parse...", isDebug: true);
+
                 try
                 {
+                    string url = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
+                    string response = await GetResponse(url, Token);
+                    WriteLog("DongniUser.ListRole | RSRR: " + response, isDebug: true);
+
+                    WriteLog("DongniUser.ListRole: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
 
                     if (json["status"].ToString() == "0")
@@ -169,13 +170,14 @@ namespace top.nuozhen.Dongnipp
 
             public async Task<DongniRole> SelectRole(int roleSort)
             {
-                string url = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
-                string response = await GetResponse(url, Token);
-                WriteLog("DongniUser.SelectRole | RSRR: " + response, isDebug: true);
 
-                WriteLog("DongniUser.ListRole: Trying to parse...", isDebug: true);
                 try
                 {
+                    string url = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
+                    string response = await GetResponse(url, Token);
+                    WriteLog("DongniUser.SelectRole | RSRR: " + response, isDebug: true);
+
+                    WriteLog("DongniUser.ListRole: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
 
 
@@ -235,13 +237,14 @@ namespace top.nuozhen.Dongnipp
 
             public async Task<DongniRole> SelectRole(string roleSort)
             {
-                string url = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
-                string response = await GetResponse(url, Token);
-                WriteLog("DongniUser.SelectRole | RSRR: " + response, isDebug: true);
 
-                WriteLog("DongniUser.ListRole: Trying to parse...", isDebug: true);
                 try
                 {
+                    string url = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
+                    string response = await GetResponse(url, Token);
+                    WriteLog("DongniUser.SelectRole | RSRR: " + response, isDebug: true);
+
+                    WriteLog("DongniUser.ListRole: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
 
 
@@ -325,6 +328,20 @@ namespace top.nuozhen.Dongnipp
                 int sort = int.Parse(roleSort);
                 return SelectRole(roleArrow, sort);
             }
+
+
+            public override string ToString()
+            {
+                Type type = this.GetType();
+                string className = type.Name;
+                string namespaceName = type.Namespace;
+
+                PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+                var propertiesWithGet = properties.Where(p => p.GetGetMethod() != null);
+                var propertyValues = propertiesWithGet.Select(p => $"{p.Name}: {p.GetValue(this)}");
+
+                return $"Class: {className}\n   Namespace: {namespaceName}\n    Properties: \n      {string.Join("\n      ", propertyValues)}";
+            }
         }
 
         public class DongniRole
@@ -357,6 +374,67 @@ namespace top.nuozhen.Dongnipp
                 this.StudentName = studentName;
                 this.UserType = userType;
             }
+
+
+            public async Task<DongniExam[]> GetLatest()
+            {
+                try
+                {
+                    string url = $"https://www.dongni100.com/api/exam/plan/student/latest?clientType=1&examType=2,3,4,5,7,9,10&userId={User.UserId}&studentId={StudentId}";
+                    string response = await GetResponse(url, User.Token);
+
+                    WriteLog("DongniRole.GetLatest | RSRR: " + response, isDebug: true);
+
+                    WriteLog("DongniRole.GetLatest: Trying to parse...", isDebug: true);
+                    JObject json = JObject.Parse(response);
+
+                    if (json["status"].ToString() == "0")
+                    {
+                        DongniExam firstExam = new DongniExam(
+                            this,
+                            (string)json["data"][0]["examId"],
+                            (string)json["data"][0]["examName"],
+                            (string)json["data"][0]["examType"],
+                            (string)json["data"][0]["startDate"],
+                            (string)json["data"][0]["endDate"]
+                            );
+                        WriteLog("DongniRole.GetLatest: Parsed 1st exam.", isDebug: true);
+                        DongniExam secondExam = new DongniExam(
+                            this,
+                            (string)json["data"][0]["examId"],
+                            (string)json["data"][0]["examName"],
+                            (string)json["data"][0]["examType"],
+                            (string)json["data"][0]["startDate"],
+                            (string)json["data"][0]["endDate"]
+                            );
+                        WriteLog("DongniRole.GetLatest: Parsed 2st exam.", isDebug: true);
+
+                        return [firstExam, secondExam];
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniRole.GetLatest Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniRole.GetLatest Method.", ex));
+                }
+                return null;
+            }
+
+            public override string ToString()
+            {
+                Type type = this.GetType();
+                string className = type.Name;
+                string namespaceName = type.Namespace;
+
+                PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+                var propertiesWithGet = properties.Where(p => p.GetGetMethod() != null);
+                var propertyValues = propertiesWithGet.Select(p => $"{p.Name}: {p.GetValue(this)}");
+
+                return $"Class: {className}\n   Namespace: {namespaceName}\n    Properties: \n      {string.Join("\n      ", propertyValues)}";
+            }
         }
 
         public class DongniExam
@@ -367,9 +445,17 @@ namespace top.nuozhen.Dongnipp
             public string ExamType { get; }
             public string StartDate { get; }
             public string EndDate { get; }
-            public string DefaultStatId { get; }
 
-            public DongniExam(DongniRole role, string examId, string examName, string examType, string startDate, string endDate, string defaultStatId)
+            /// <summary>
+            /// 构造一个DongniExam。
+            /// </summary>
+            /// <param name="role">该Exam所属的DongniRole</param>
+            /// <param name="examId"></param>
+            /// <param name="examName"></param>
+            /// <param name="examType">考试类型ID</param>
+            /// <param name="startDate">开始时间，为13位北京时间时间戳</param>
+            /// <param name="endDate">结束时间，为13位北京时间时间戳</param>
+            public DongniExam(DongniRole role, string examId, string examName, string examType, string startDate, string endDate)
             {
                 this.Role = role;
                 this.ExamId = examId;
@@ -377,10 +463,53 @@ namespace top.nuozhen.Dongnipp
                 this.ExamType = examType;
                 this.StartDate = startDate;
                 this.EndDate = endDate;
-                this.DefaultStatId = defaultStatId;
             }
 
+            private async Task<string> SetDefaultStatId()
+            {
 
+                try
+                {
+                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/all/examStatId?clientType=1&examId={ExamId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string response = await GetResponse(url, Role.User.Token);
+                    WriteLog("DongniExam.GetDeafultStatId | RSRR: " + response, isDebug: true);
+
+                    WriteLog("DongniExam.GetDeafultStatId: Trying to parse... ", isDebug: true);
+                    JObject json = JObject.Parse(response);
+
+                    if (json["status"].ToString() == "0")
+                    {
+                        return json["data"]["statId"].ToString();
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniExam.GetDefaultStatId Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetDefaultStatId Method.", ex));
+                }
+                return null;
+            }
+
+            public override string ToString()
+            {
+                Type type = this.GetType();
+                string className = type.Name;
+                string namespaceName = type.Namespace;
+
+                PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+                var propertiesWithGet = properties.Where(p => p.GetGetMethod() != null);
+                var propertyValues = propertiesWithGet.Select(p => $"{p.Name}: {p.GetValue(this)}");
+
+                return $"Class: {className}\n   Namespace: {namespaceName}\n    Properties: \n      {string.Join("\n      ", propertyValues)}";
+            }
         }
 
 
