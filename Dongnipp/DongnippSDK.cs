@@ -423,6 +423,53 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            public async Task<DongniExam[]> GetList()
+            {
+                try
+                {
+                    string url = $"https://www.dongni100.com/api/exam/plan/student/exam/list?clientType=1&schoolId={SchoolId}&examType=2,3,4,5,7,10&pageSize=100&pageNo=1&userId={User.UserId}&studentId={StudentId}";
+                    string response = await GetResponse(url, User.Token);
+
+                    WriteLog("DongniRole.GetList | RSRR: " + response, isDebug: true);
+
+                    WriteLog("DongniRole.GetList: Trying to parse...", isDebug: true);
+                    JObject json = JObject.Parse(response);
+                    if (json["status"].ToString() == "0")
+                    {
+                        List<DongniExam> dongniExams = new List<DongniExam>();
+
+                        for(int i = 0; i < json["data"]["exam"].Count(); i++)
+                        {
+                            DongniExam dongniExam = new DongniExam(
+                                this,
+                                (string)json["data"]["exam"][i]["examId"],
+                                (string)json["data"]["exam"][i]["examName"],
+                                (string)json["data"]["exam"][i]["examType"],
+                                (string)json["data"]["exam"][i]["startDate"],
+                                (string)json["data"]["exam"][i]["endDate"]
+                                );
+                            dongniExams.Add(dongniExam);
+                            WriteLog($"DongniRole.GetList: Parsed {dongniExams.Count} exams.", isDebug: true);
+                        }
+
+                        return dongniExams.ToArray();
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Cannot get specified user information.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniUser.SelectRole Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.SelectRole Method.", ex));
+                }
+                return null;
+            }
+
             public override string ToString()
             {
                 Type type = this.GetType();

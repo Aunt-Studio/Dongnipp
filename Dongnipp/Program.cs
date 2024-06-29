@@ -83,21 +83,21 @@ namespace top.nuozhen.Dongnipp.test
             Console.WriteLine("考试开始时间 (startDate) = " + latestExams[1].StartDate);
             Console.WriteLine("考试结束时间 (endDate) = " + latestExams[1].EndDate);
             Console.WriteLine("\n================================\n");
-            //Console.WriteLine("即将输出考试列表, 开始请求考试列表。");
-            //Console.WriteLine("\n================================\n");
-            //(string[] examName, string[] examId, string[] examType, string[] startDate, string[] endDate) = await dongniSDK.getExamList(Token, userId, studentId, schoolId);
-            //for (int i = 0; i < examName.Length; i++)
-            //{
-            //    Console.WriteLine("\n******************************");
-            //    Console.WriteLine($"第{i + 1}个考试");
-            //    Console.WriteLine($"考试名称(examName): {examName[i]}");
-            //    Console.WriteLine($"考试ID(examId): {examId[i]}");
-            //    Console.WriteLine($"考试类型(examType): {examType[i]}");
-            //    Console.WriteLine($"考试开始时间(startDate): {startDate[i]}");
-            //    Console.WriteLine($"考试结束时间(endDate): {endDate[i]}");
-            //    Console.WriteLine("******************************");
-            //}
-            //Console.WriteLine("\n================================");
+            Console.WriteLine("即将输出考试列表, 开始请求考试列表。");
+            DongnippSDK.DongniExam[] examList = await currentRole.GetList();
+            Console.WriteLine("\n================================\n");
+            for (int i = 0; i < examList.Length; i++)
+            {
+                Console.WriteLine("\n******************************");
+                Console.WriteLine($"第{i + 1}个考试");
+                Console.WriteLine($"考试名称(examName): {examList[i].ExamName}");
+                Console.WriteLine($"考试ID(examId): {examList[i].ExamId}");
+                Console.WriteLine($"考试类型(examType): {examList[i].ExamType}");
+                Console.WriteLine($"考试开始时间(startDate): {examList[i].StartDate}");
+                Console.WriteLine($"考试结束时间(endDate): {examList[i].EndDate}");
+                Console.WriteLine("******************************");
+            }
+            Console.WriteLine("\n================================");
             //Console.WriteLine("即将开始测试考试信息查询");
             //Console.WriteLine("================================\n");
             //Console.WriteLine("-------------分数查询-------------\n");
