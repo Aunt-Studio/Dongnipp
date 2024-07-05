@@ -94,7 +94,7 @@ namespace top.nuozhen.Dongnipp
                         throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + serverResponse);
 
                     }
-
+                    return new DongniUser(accountName, token, nickName, userId);
                 }
                 catch (APIException ex)
                 {
@@ -103,10 +103,6 @@ namespace top.nuozhen.Dongnipp
                 catch (Exception ex)
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.Login Method.", ex));
-                }
-                if (accountName != string.Empty && token != string.Empty && nickName != string.Empty && userId != string.Empty)
-                {
-                    return new DongniUser(accountName, token, nickName, userId);
                 }
                 return null;
             }
