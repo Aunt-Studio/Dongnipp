@@ -298,7 +298,7 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
-            public DongniRole SelectRole(DongniRole[] roleArrow, int roleSort)
+            public static DongniRole SelectRole(DongniRole[] roleArrow, int roleSort)
             {
                 try
                 {
@@ -319,7 +319,7 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
-            public DongniRole SelectRole(DongniRole[] roleArrow, string roleSort)
+            public static DongniRole SelectRole(DongniRole[] roleArrow, string roleSort)
             {
                 int sort = int.Parse(roleSort);
                 return SelectRole(roleArrow, sort);
@@ -508,7 +508,69 @@ namespace top.nuozhen.Dongnipp
                 this.EndDate = endDate;
             }
 
-            private async Task<string> SetDefaultStatId()
+            public async Task<(string, string)> GetScore()
+            {
+                try
+                {
+                    string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId=&examId={ExamId}&statId={await GetDefaultStatId()}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string response = await GetResponse(url, Role.User.Token);
+
+                    JObject json = JObject.Parse(response);
+                    if (json["status"].ToString() == "0")
+                    {
+                        string fullMark = (string)json["data"]["fullMark"];
+                        string totalScore = (string)json["data"]["totalScore"];
+
+                        return (fullMark, totalScore);
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniExam.GetScore Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetScore Method.", ex));
+                }
+                return (null, null);
+            }
+
+            public async Task<(string, string)> GetScore(string statId)
+            {
+                try
+                {
+                    string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId=&examId={ExamId}&statId={statId}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string response = await GetResponse(url, Role.User.Token);
+
+                    JObject json = JObject.Parse(response);
+                    if (json["status"].ToString() == "0")
+                    {
+                        string fullMark = (string)json["data"]["fullMark"];
+                        string totalScore = (string)json["data"]["totalScore"];
+
+                        return (fullMark, totalScore);
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniExam.GetScore Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetScore Method.", ex));
+                }
+                return (null, null);
+            }
+
+            private async Task<string> GetDefaultStatId()
             {
 
                 try
