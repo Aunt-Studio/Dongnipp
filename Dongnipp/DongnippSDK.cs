@@ -38,6 +38,7 @@ namespace top.nuozhen.Dongnipp
             public string Token { get; }
             public string NickName { get; }
             public string UserId { get; }
+            public bool IsLogon { get; private set; }
 
             /// <summary>
             /// DongniUser 的构造函数，不应被外部直接调用，创建DongniUser 实例请使用Login()异步工厂方法。
@@ -52,6 +53,7 @@ namespace top.nuozhen.Dongnipp
                 this.Token = token;
                 this.NickName = nickName;
                 this.UserId = userId;
+                this.IsLogon = true;
             }
 
             public static async Task<DongniUser> Login(string userName, string password)
@@ -87,7 +89,7 @@ namespace top.nuozhen.Dongnipp
                         accountName = json["data"]["accountName"].ToString();
                         nickName = json["data"]["userName"].ToString();
                         userId = json["data"]["userId"].ToString();
-
+                        
                     }
                     else
                     {
@@ -105,6 +107,46 @@ namespace top.nuozhen.Dongnipp
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.Login Method.", ex));
                 }
                 return null;
+            }
+
+            public async Task Logout()
+            {
+                try
+                {
+                    string url = "https://www.dongni100.com/api/base/data/logout";
+                    string serverResponse;
+                    using (HttpClient client = new HttpClient())
+                    {
+                        StringContent content = new StringContent("");
+                        client.DefaultRequestHeaders.Add("Dongni-Login", Token);
+                        HttpResponseMessage response = await client.PostAsync(url, content);
+                        serverResponse = await response.Content.ReadAsStringAsync();
+                    }
+                    WriteLog("DongniUser.Logout | RSRR: " + serverResponse, isDebug: true);
+
+                    JObject json = JObject.Parse(serverResponse);
+
+
+                    if (json["status"].ToString() == "0")
+                    {
+                        IsLogon = false;
+
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + serverResponse);
+
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniUser.Logout Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.Logout Method.", ex));
+                }
+
             }
 
             public async Task<DongniRole[]> ListRole()
@@ -702,7 +744,7 @@ namespace top.nuozhen.Dongnipp
         {
             using (HttpClient client = new HttpClient())
             {
-                client.DefaultRequestHeaders.Add("Dongni-login", token);
+                client.DefaultRequestHeaders.Add("Dongni-Login", token);
                 HttpResponseMessage response = await client.GetAsync(url);
                 string responseContent = await response.Content.ReadAsStringAsync();
                 return responseContent;
