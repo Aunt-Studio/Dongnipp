@@ -25,20 +25,13 @@ jobs:
     - name: Build
       run: dotnet build --no-restore
     - name: Test
-      run: dotnet test --logger trx --results-directory "TestResults"
+      run: dotnet test
     - name: Publish
       run: dotnet publish /p:PublishSingleFile=true /p:PublishDir="BuildResults" --sc false
-    - name: Upload dotnet test results
-      uses: actions/upload-artifact@v4
-      with:
-        name: dotnet-results-TestResults
-        path: TestResults
-      # Use always() to always run this step to publish test results when there are test failures
-      if: ${{ always() }}
     - name: Upload dotnet build results
       uses: actions/upload-artifact@v4
       with:
         name: dotnet-build-results
-        path: BuildResults
+        path: BuildResults\Dongnipp.exe
       # Use always() to always run this step to publish test results when there are test failures
       if: ${{ always() }}
