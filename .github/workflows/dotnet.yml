@@ -25,20 +25,20 @@ jobs:
     - name: Build
       run: dotnet build --no-restore
     - name: Test
-      run: dotnet test --logger trx --results-directory "TestResults-${{ matrix.dotnet-version }}"
+      run: dotnet test --logger trx --results-directory "TestResults"
     - name: Publish
-      run: dotnet publish /p:PublishSingleFile=true --sc false --output "BuildResults-${{ matrix.dotnet-version }}"
+      run: dotnet publish /p:PublishSingleFile=true /p:PublishDir="BuildResults" --sc false
     - name: Upload dotnet test results
       uses: actions/upload-artifact@v4
       with:
-        name: dotnet-results-${{ matrix.dotnet-version }}
-        path: TestResults-${{ matrix.dotnet-version }}
+        name: dotnet-results-TestResults
+        path: TestResults
       # Use always() to always run this step to publish test results when there are test failures
       if: ${{ always() }}
     - name: Upload dotnet build results
       uses: actions/upload-artifact@v4
       with:
-        name: dotnet-build-results-${{ matrix.dotnet-version }}
-        path: BuildResults-${{ matrix.dotnet-version }}
+        name: dotnet-build-results
+        path: BuildResults
       # Use always() to always run this step to publish test results when there are test failures
       if: ${{ always() }}
