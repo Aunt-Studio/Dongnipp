@@ -13,7 +13,9 @@ jobs:
   build:
 
     runs-on: windows-latest
-
+    defaults:
+      run:
+        working-directory: ./react
     steps:
     - uses: actions/checkout@v4
     - name: Setup .NET
@@ -27,11 +29,11 @@ jobs:
     - name: Test
       run: dotnet test
     - name: Publish
-      run: dotnet publish /p:PublishSingleFile=true /p:PublishDir="BuildResults" --sc false
+      run: dotnet publish /p:PublishSingleFile=true /p:PublishDir=./BuildResults --sc false
     - name: Upload dotnet build results
       uses: actions/upload-artifact@v4
       with:
         name: dotnet-build-results
-        path: BuildResults\Dongnipp.exe
+        path: ./BuildResults
       # Use always() to always run this step to publish test results when there are test failures
       if: ${{ always() }}
