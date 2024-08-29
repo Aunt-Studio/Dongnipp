@@ -1,12 +1,16 @@
+using Newtonsoft.Json.Linq;
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.OpenSsl;
+using Org.BouncyCastle.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
+using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
-using System.Net.Http;
-using System.Security.Cryptography;
-using System.Reflection;
 
 namespace top.nuozhen.Dongnipp
 {
@@ -25,23 +29,53 @@ namespace top.nuozhen.Dongnipp
     Learn more: https://github.com/Aunt-Studio/Dongnipp
     */
 
+    /// <summary>
+    /// Dongni++ SDK 主类。
+    /// </summary>
     class DongnippSDK
     {
+        /// <summary>
+        /// 调试信息输出开关，控制是否在控制台中输出调试信息。
+        /// </summary>
         public static bool debugging;
-        public static string Version = "V0.0.0 Developing";//全局版本号
+        /// <summary>
+        /// SDK 版本号。
+        /// </summary>
+        public static string Version = "V0.0.0 Developing";
 
+        /// <summary>
+        /// <see cref="DongniUser"/> 类，用于封装一个已登录的懂你平台用户。
+        /// </summary>
         public class DongniUser
         {
+            /// <summary>
+            /// 懂你平台用户名、密码加密传输所使用的 RSA 公钥。
+            /// </summary>
             private const string PublicKey = "-----BEGIN PUBLIC KEY-----MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCphVCsMh1khU8W0l1WBu0RHTprNr+e2iO0+lLdx+I0tAzCj7jdr5h+tcqZazFuwa751wuegYb0XDbm+/Ti7mWH/Etm+Qc9c5+dBZGzEH0zH8f1cV8EfU8qcsNtn/ixAS7HDl0nzhzlATmH8iFa3l2dYoMBxUZV6Bpyj+gSWg+Y5QIDAQAB-----END PUBLIC KEY-----";
 
+            /// <summary>
+            /// 登录后的用户名。通常是手机号。
+            /// </summary>
             public string AccountName { get; }
+            /// <summary>
+            /// 登录后的用户令牌。即接口请求头中的 Dongni-Login 字段。
+            /// </summary>
             public string Token { get; }
+            /// <summary>
+            /// 登录接口返回的 userName，通常是学生姓名。
+            /// </summary>
             public string NickName { get; }
+            /// <summary>
+            /// 登录接口返回的用户 ID。
+            /// </summary>
             public string UserId { get; }
+            /// <summary>
+            /// 预留的登录状态。
+            /// </summary>
             public bool IsLogon { get; private set; }
 
             /// <summary>
-            /// DongniUser 的构造函数，不应被外部直接调用，创建 DongniUser 实例请使用Login()异步工厂方法。
+            /// <see cref="DongniUser"/> 的构造函数，不应被外部直接调用，创建 <see cref="DongniUser"/> 实例请使用 <see cref="Login"/> 异步工厂方法。
             /// </summary>
             /// <param name="accountName"></param>
             /// <param name="token"></param>
@@ -57,7 +91,7 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 登录到懂你平台，获得一个 DongniUser 实例。
+            /// 登录到懂你平台，获得一个 <see cref="DongniUser"/> 实例。
             /// </summary>
             /// <param name="userName">用户名 (通常是手机号)</param>
             /// <param name="password">明文密码</param>
@@ -116,7 +150,7 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 向懂你平台发送登出请求以销毁当前 DongniUser 实例中的 Token。
+            /// 向懂你平台发送登出请求以销毁当前 <see cref="DongniUser"/> 实例中的 <see cref="Token"/>。
             /// </summary>
             /// <returns></returns>
             public async Task Logout()
@@ -162,7 +196,7 @@ namespace top.nuozhen.Dongnipp
             /// <summary>
             /// 获取当前用户的所有角色。
             /// </summary>
-            /// <returns>DongniRole 实例数组</returns>
+            /// <returns><see cref="DongniRole"/> 实例数组</returns>
             public async Task<DongniRole[]> ListRole()
             {
 
@@ -221,13 +255,13 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 利用roleSort选择一个角色。
+            /// 利用 <paramref name="roleSort"/> 选择一个角色。
             /// 
-            /// 将会先请求API枚举所有角色信息，并逐一匹配 roleSort 是否等于某个角色的 userSort。
-            /// 通常情况下 roleSort = 0 取得的是默认角色。
+            /// 将会先请求API枚举所有角色信息，并逐一匹配 <paramref name="roleSort"/> 是否等于某个角色的 userSort。
+            /// 通常情况下 <paramref name="roleSort"/> = 0 取得的是默认角色。
             /// </summary>
             /// <param name="roleSort">已转换为整数类型的 roleSort</param>
-            /// <returns>DongniRole 实例</returns>
+            /// <returns><see cref="DongniRole"/> 实例</returns>
             public async Task<DongniRole> SelectRole(int roleSort)
             {
 
@@ -296,13 +330,13 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 利用roleSort选择一个角色。
+            /// 利用 <paramref name="roleSort"/> 选择一个角色。
             /// 
-            /// 将会先请求API枚举所有角色信息，并逐一匹配 roleSort 是否等于某个角色的 userSort。
-            /// 通常情况下 roleSort = "0" 取得的是默认角色。
+            /// 将会先请求API枚举所有角色信息，并逐一匹配 <paramref name="roleSort"/> 是否等于某个角色的 userSort。
+            /// 通常情况下 <paramref name="roleSort"/> = 0 取得的是默认角色。
             /// </summary>
             /// <param name="roleSort">字符串类型的 roleSort</param>
-            /// <returns>DongniRole 实例</returns>
+            /// <returns><see cref="DongniRole"/> 实例</returns>
             public async Task<DongniRole> SelectRole(string roleSort)
             {
 
@@ -371,14 +405,14 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 利用 roleSort 以及一个以 roleSort 为数组下标的DongniRole实例数组选择一个角色。需要与 ListRole() 方法配合使用。
+            /// 利用 <paramref name="roleSort"/> 以及一个以 <paramref name="roleSort"/> 为数组下标的 <see cref="DongniRole"/> 实例数组选择一个角色。需要与 <see cref="ListRole"/> 方法配合使用。
             /// 
-            /// 注意: 不推荐使用此方法。因为该方法可能会选择预期外的 DongniRole 实例。
+            /// 注意: 不推荐使用此方法。因为该方法可能会选择预期外的 <see cref="DongniRole"/> 实例。
             /// 但该方法不需要联网。
             /// </summary>
-            /// <param name="roleArrow">以 roleSort 为数组下标的 DongniRole 实例数组</param>
+            /// <param name="roleArrow">以 <paramref name="roleSort"/> 为数组下标的 <see cref="DongniRole"/> 实例数组</param>
             /// <param name="roleSort">已转换为整数类型的 roleSort</param>
-            /// <returns>roleArrow[roleSort]</returns>
+            /// <returns><paramref name="roleArrow"/>[<paramref name="roleSort"/>]</returns>
             public static DongniRole SelectRole(DongniRole[] roleArrow, int roleSort)
             {
                 try
@@ -401,7 +435,7 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 利用 roleSort 以及一个以 roleSort 为数组下标的DongniRole实例数组选择一个角色。需要与 ListRole() 方法配合使用。
+            /// 利用 <paramref name="roleSort"/> 以及一个以 <paramref name="roleSort"/> 为数组下标的 <see cref="DongniRole"/> 实例数组选择一个角色。需要与 <see cref="ListRole"/> 方法配合使用。
             /// 
             /// 注意: 不推荐使用此方法。因为该方法可能会选择预期外的 DongniRole 实例，并且类型转换错误将抛出异常。
             /// 但该方法不需要联网。
@@ -446,25 +480,64 @@ namespace top.nuozhen.Dongnipp
             }
         }
 
+        /// <summary>
+        /// 一个懂你平台账户角色。
+        /// </summary>
         public class DongniRole
         {
+            /// <summary>
+            /// 角色所属的 <see cref="DongniUser"/> 实例
+            /// </summary>
             public DongniUser User { get; }
+            /// <summary>
+            /// 角色的序号
+            /// </summary>
             public string RoleSort { get; }
+            /// <summary>
+            /// 角色所属的班级的 ID
+            /// </summary>
             public string ClassId { get; }
+            /// <summary>
+            /// 角色所属的班级的名称
+            /// </summary>
             public string ClassName { get; }
+            /// <summary>
+            /// 角色所属的年段的 ID
+            /// </summary>
             public string GradeId { get; }
+            /// <summary>
+            /// 角色所属的年段的名称
+            /// </summary>
             public string GradeName { get; }
+            /// <summary>
+            /// 角色亲戚ID，例如该角色为家长，则该值为家长角色的 ID
+            /// </summary>
             public string RelativeId { get; }
+            /// <summary>
+            /// 角色所属的学校 ID
+            /// </summary>
             public string SchoolId { get; }
+            /// <summary>
+            /// 角色所属的学校名称
+            /// </summary>
             public string SchoolName { get; }
+            /// <summary>
+            /// 角色关联的学生 ID
+            /// </summary>
             public string StudentId { get; }
+            /// <summary>
+            /// 角色关联的学生姓名
+            /// </summary>
             public string StudentName { get; }
+            /// <summary>
+            /// 角色类型。
+            /// </summary>
             public string UserType { get; }
 
             /// <summary>
-            /// DongniRole 的构造函数。通常不需要手动调用，但假如遇到无网情况可以通过这个方法从缓存中构造对象。
+            /// <see cref="DongniRole"/> 的构造函数。通常不需要手动调用，但假如遇到无网情况可以通过这个方法从缓存中构造对象。
             /// </summary>
-            /// <param name="user">角色所属的 DongniUser 实例</param>
+            /// <param name="user">角色所属的 <see cref="DongniUser"/> 实例</param>
             /// <param name="roleSort"></param>
             /// <param name="classId"></param>
             /// <param name="className"></param>
@@ -495,7 +568,7 @@ namespace top.nuozhen.Dongnipp
             /// <summary>
             /// 获取最近两次的考试结果。
             /// </summary>
-            /// <returns>DongniExam 实例数组</returns>
+            /// <returns><see cref="DongniExam"/> 实例数组</returns>
             public async Task<DongniExam[]> GetLatest()
             {
                 try
@@ -550,7 +623,7 @@ namespace top.nuozhen.Dongnipp
             /// <summary>
             /// 获取该角色下所有考试结果。
             /// </summary>
-            /// <returns>DongniExam 实例数组</returns>
+            /// <returns><see cref="DongniExam"/> 实例数组</returns>
             public async Task<DongniExam[]> GetList()
             {
                 try
@@ -601,7 +674,7 @@ namespace top.nuozhen.Dongnipp
             /// <summary>
             /// 获取该角色下所有课程及其对应 ID。
             /// </summary>
-            /// <returns>DongniCourse 实例对象，含了每个科目的名称、对应 courseId</returns>
+            /// <returns><see cref="DongniCourse"/> 实例对象，含了每个科目的名称、对应 courseId</returns>
             public async Task<DongniCourse[]> GetCoursesList()
             {
                 try
@@ -639,10 +712,10 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 利用 courseId 获得 courseName。
+            /// 利用 <paramref name="courseId"/> 获得 courseName。
             /// </summary>
             /// <param name="courseId">已转换为整数类型的 courseId</param>
-            /// <returns></returns>
+            /// <returns><paramref name="courseId"/> 对应的科目的中文名称</returns>
             public async Task<string> CourseIdToName(int courseId)
             {
                 try
@@ -696,11 +769,26 @@ namespace top.nuozhen.Dongnipp
             }
         }
 
+        /// <summary>
+        /// 一个懂你平台考试实例。
+        /// </summary>
         public class DongniExam
         {
+            /// <summary>
+            /// 考试所属的角色实例
+            /// </summary>
             public DongniRole Role { get; }
+            /// <summary>
+            /// 考试 ID
+            /// </summary>
             public string ExamId { get; }
+            /// <summary>
+            /// 考试名称
+            /// </summary>
             public string ExamName { get; }
+            /// <summary>
+            /// 考试类型 ID
+            /// </summary>
             public string ExamType { get; }
             /// <summary>
             /// 开始时间，为13位北京时间时间戳
@@ -712,7 +800,7 @@ namespace top.nuozhen.Dongnipp
             public string EndDate { get; }
 
             /// <summary>
-            /// DongniExam 的构造函数。通常不需要手动调用，但假如遇到无网情况可以通过这个方法从缓存中构造对象。
+            /// <see cref="DongniExam"/> 的构造函数。通常不需要手动调用，但假如遇到无网情况可以通过这个方法从缓存中构造对象。
             /// </summary>
             /// <param name="role">该考试所属的角色</param>
             /// <param name="examId"></param>
@@ -767,7 +855,7 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 获取默认科目、指定 statId 的考试分数。
+            /// 获取默认科目、指定 <paramref name="statId"/> 的考试分数。
             /// </summary>
             /// <param name="statId">字符串类型的 statId</param>
             /// <returns>(满分, 考生得分)</returns>
@@ -842,7 +930,7 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 获取指定科目、指定 statId 的考试分数。
+            /// 获取指定科目、指定 <paramref name="statId"/> 的考试分数。
             /// </summary>
             /// <param name="statId">字符串类型的 statId</param>
             /// <param name="courseId">已转换为整数类型的 courseId</param>
@@ -916,7 +1004,7 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 获取默认科目、指定 statId 的考试(年段)排名。
+            /// 获取默认科目、指定 <paramref name="statId"/> 的考试(年段)排名。
             /// </summary>
             /// <param name="statId">字符串类型的 statId</param>
             /// <returns>examRanking 值，通常是年段排名</returns>
@@ -990,7 +1078,7 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 获取指定科目、指定 statId 的考试(年段)排名。
+            /// 获取指定科目、指定 <paramref name="statId"/> 的考试(年段)排名。
             /// </summary>
             /// <param name="statId">字符串类型的 statId</param>
             /// <param name="courseId">已转换为整数类型的 courseId</param>
@@ -1064,7 +1152,7 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 获取默认科目、指定 statId 的班级排名。
+            /// 获取默认科目、指定 <paramref name="statId"/> 的班级排名。
             /// </summary>
             /// <param name="statId">字符串类型的 statId</param>
             /// <returns>classRanking 值，通常是班级排名</returns>
@@ -1138,7 +1226,7 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 获取默认科目、默认 statId 的班级排名。
+            /// 获取默认科目、默认 <paramref name="statId"/> 的班级排名。
             /// </summary>
             /// <param name="statId">字符串类型的 statId</param>
             /// <param name="courseId">已转换为整数类型的 courseId</param>
@@ -1176,8 +1264,8 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 利用 courseId 以及默认的 statId 获得 courseName。
-            /// 该方法只会请求 API 枚举当前考试下的所有科目，针对性较强，因此对于已知考试对象的查询，该方法相对 DongniRole 内的同名方法效率更高。
+            /// 利用 <paramref name="courseId"/> 以及默认的 statId 获得 courseName。
+            /// 该方法只会请求 API 枚举当前考试下的所有科目，针对性较强，因此对于已知考试对象的查询，该方法相对 <see cref="DongniRole.CourseIdToName"/> 方法效率更高。
             /// </summary>
             /// <param name="courseId">已转换为整数类型的 courseId</param>
             /// <returns>对应科目的中文名称</returns>
@@ -1225,8 +1313,8 @@ namespace top.nuozhen.Dongnipp
             }
 
             /// <summary>
-            /// 利用 courseId 以及指定的 statId 获得 courseName。
-            /// 该方法只会请求 API 枚举当前考试下的所有科目，针对性较强，因此对于已知考试对象的查询，该方法相对 DongniRole 内的同名方法效率更高。
+            /// 利用 <paramref name="courseId"/> 以及指定的 <paramref name="statId"/> 获得 courseName。
+            /// 该方法只会请求 API 枚举当前考试下的所有科目，针对性较强，因此对于已知考试对象的查询，该方法相对 <see cref="DongniRole.CourseIdToName"/> 方法效率更高。
             /// </summary>
             /// <param name="courseId">已转换为整数类型的 courseId</param>
             /// <param name="statId">字符串类型的 statId</param>
@@ -1325,6 +1413,11 @@ namespace top.nuozhen.Dongnipp
             }
         }
 
+        /// <summary>
+        /// 一个懂你平台的科目实例。该实例仅记录科目中文名称以及科目对应的 courseId。
+        /// </summary>
+        /// <param name="courseId">科目对应 courseId</param>
+        /// <param name="courseName">科目的中文名称</param>
         public class DongniCourse(int courseId, string courseName)
         {
             public int CourseId { get; set; } = courseId;
@@ -1408,38 +1501,125 @@ namespace top.nuozhen.Dongnipp
         {
             debugging = debug;
         }
+
+
+        /// <summary>
+        /// 定义处理错误事件的委托方法。
+        /// </summary>
+        /// <param name="sender">事件源</param>
+        /// <param name="e">包含事件数据的 <see cref="ErrorEventArgs"/> 实例。</param>
         public delegate void ErrorHandler(object sender, ErrorEventArgs e);
 
+        /// <summary>
+        /// 当发生错误时触发的事件。
+        /// </summary>
         public static event ErrorHandler ErrorOccurred;
 
+        /// <summary>
+        /// 提供错误事件数据的类。
+        /// </summary>
         public class ErrorEventArgs : EventArgs
         {
+            /// <summary>
+            /// 错误消息。
+            /// </summary>
             public string Message { get; set; }
+
+            /// <summary>
+            /// 与错误关联的异常。
+            /// </summary>
             public Exception Exception { get; set; }
 
+            /// <summary>
+            /// 构造 <see cref="ErrorEventArgs"/> 类的新实例。
+            /// </summary>
+            /// <param name="message">错误消息。</param>
+            /// <param name="exception">与错误关联的异常。</param>
             public ErrorEventArgs(string message, Exception exception)
             {
                 Message = message;
                 Exception = exception;
             }
-
-
         }
+
+        /// <summary>
+        /// 表示API调用过程中发生的错误。
+        /// </summary>
         public class APIException : Exception
         {
+            /// <summary>
+            /// 构造 <see cref="APIException"/> 类的新实例。
+            /// </summary>
             public APIException()
             {
             }
 
+            /// <summary>
+            /// 使用指定错误消息构造 <see cref="APIException"/> 类的新实例。
+            /// </summary>
+            /// <param name="message">描述错误的消息。</param>
             public APIException(string message)
                 : base(message)
             {
             }
 
+            /// <summary>
+            /// 使用指定错误消息和对作为此异常原因的内部异常的引用来构造 <see cref="APIException"/> 类的新实例。
+            /// </summary>
+            /// <param name="message">描述错误的消息。</param>
+            /// <param name="inner">导致当前异常的异常。</param>
             public APIException(string message, Exception inner)
                 : base(message, inner)
             {
             }
         }
+
+
+        /// <summary>
+        /// 提供RSA加密相关的实用方法。
+        /// </summary>
+        internal class RSAUtils
+        {
+            /// <summary>
+            /// 从PEM格式的公钥字符串获取RSA公钥参数。
+            /// </summary>
+            /// <param name="publicKeyPem">PEM格式的公钥字符串。</param>
+            /// <returns>包含公钥参数的 <see cref="RSAParameters"/> 实例。</returns>
+            public static RSAParameters GetPublicKeyParameters(string publicKeyPem)
+            {
+                // 使用BouncyCastle库解析PEM格式的公钥
+                PemReader pemReader = new PemReader(new System.IO.StringReader(publicKeyPem));
+                AsymmetricKeyParameter publicKeyParam = (AsymmetricKeyParameter)pemReader.ReadObject();
+
+                // 将BouncyCastle的公钥参数转换为.NET的RSAParameters类型
+                RSAParameters publicKeyParameters = DotNetUtilities.ToRSAParameters((RsaKeyParameters)publicKeyParam);
+
+                return publicKeyParameters;
+            }
+
+            /// <summary>
+            /// 使用RSA公钥加密数据并将结果转换为Base64字符串。
+            /// </summary>
+            /// <param name="publicKey">用于加密的RSA公钥参数。</param>
+            /// <param name="data">要加密的字节数组。</param>
+            /// <returns>加密后的Base64字符串。</returns>
+            public static string EncryptToBase64(RSAParameters publicKey, byte[] data)
+            {
+                using (var rsa = RSA.Create())
+                {
+                    rsa.ImportParameters(publicKey);
+
+                    // 使用公钥加密数据
+                    byte[] encryptedData = rsa.Encrypt(data, RSAEncryptionPadding.Pkcs1);
+
+                    // 将加密结果转换为Base64字符串
+                    string base64String = Convert.ToBase64String(encryptedData);
+
+                    return base64String;
+                }
+            }
+        }
+
+
     }
 }
