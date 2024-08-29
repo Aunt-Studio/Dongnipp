@@ -14,7 +14,6 @@ namespace top.nuozhen.Dongnipp.ConsoleProgram
 
         public static async Task Main()
         {
-            //RunTesting();
             DongnippSDK.SetDebug(false);
             DongnippSDK.ErrorOccurred += (sender, e) =>
             {
@@ -511,14 +510,6 @@ namespace top.nuozhen.Dongnipp.ConsoleProgram
             } while (true);
 
             return password;
-        }
-        /// <summary>
-        /// 在这里放置运行前用以测试的代码。该方法仅在程序运行之初调用。
-        /// </summary>
-        private static void RunTesting()
-        {
-
-            Console.ReadLine();
         }
 
 
