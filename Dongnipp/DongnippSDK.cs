@@ -806,7 +806,7 @@ namespace top.nuozhen.Dongnipp
             /// <summary>
             /// 获取指定科目、默认 statId 的考试分数。
             /// </summary>
-            /// <param name="courseId">已转换为整数类型的courseId</param>
+            /// <param name="courseId">已转换为整数类型的 courseId</param>
             /// <returns>(满分, 考生得分)</returns>
             public async Task<(string, string)> GetScore(int courseId)
             {
@@ -845,7 +845,7 @@ namespace top.nuozhen.Dongnipp
             /// 获取指定科目、指定 statId 的考试分数。
             /// </summary>
             /// <param name="statId">字符串类型的 statId</param>
-            /// <param name="courseId">已转换为整数类型的courseId</param>
+            /// <param name="courseId">已转换为整数类型的 courseId</param>
             /// <returns>(满分, 考生得分)</returns>
             public async Task<(string, string)> GetScore(string statId, int courseId)
             {

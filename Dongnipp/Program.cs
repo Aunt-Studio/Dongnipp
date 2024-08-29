@@ -205,12 +205,26 @@ namespace top.nuozhen.Dongnipp.ConsoleProgram
             string totalScore;
             if (string.IsNullOrEmpty(statId))
             {
-                (fullMark, totalScore) = await currentExam.GetScore(courseId);
+                if (courseId == 0)
+                {
+                    (fullMark, totalScore) = await currentExam.GetScore();
+                }
+                else
+                {
+                    (fullMark, totalScore) = await currentExam.GetScore(courseId);
+                }
                 courseName = await currentExam.CourseIdToName(courseId);
             }
             else
             {
-                (fullMark, totalScore) = await currentExam.GetScore(statId, courseId);
+                if (courseId == 0)
+                {
+                    (fullMark, totalScore) = await currentExam.GetScore(statId);
+                }
+                else
+                {
+                    (fullMark, totalScore) = await currentExam.GetScore(statId, courseId);
+                }
                 courseName = await currentExam.CourseIdToName(courseId, statId);
             }
             ConsoleColor originalForegroundColor = Console.ForegroundColor;
