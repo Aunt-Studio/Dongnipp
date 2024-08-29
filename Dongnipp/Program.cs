@@ -5,13 +5,13 @@ using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 // This is just a TESTING file!!!
-namespace top.nuozhen.Dongnipp.test
+namespace top.nuozhen.Dongnipp.ConsoleProgram
 {
     internal class Program
     {
-        static DongnippSDK.DongniUser dongniUser;
-        static DongnippSDK.DongniRole currentRole;
-        // This is just a TESTING file!!!
+        private static DongnippSDK.DongniUser dongniUser;
+        private static DongnippSDK.DongniRole currentRole;
+
         public static async Task Main()
         {
             //RunTesting();
@@ -30,7 +30,7 @@ namespace top.nuozhen.Dongnipp.test
 
                 string userResponse = Console.ReadLine();
 
-                if (userResponse.ToUpper() != "Y" && userResponse.ToUpper() != "y")
+                if (!userResponse.Equals("Y", StringComparison.CurrentCultureIgnoreCase))
                 {
                     Environment.Exit(0);
                 }
@@ -73,10 +73,13 @@ namespace top.nuozhen.Dongnipp.test
                         await InquireExamScore();
                         break;
                     case "g":
-                        //
+                        await InquireExamGradeRanking();
                         break;
                     case "c":
-                        //
+                        await InquireExamClassRanking();
+                        break;
+                    case "u":
+                        await InquireAllCoursesList();
                         break;
                     case "q":
                         await Logout();
@@ -91,25 +94,6 @@ namespace top.nuozhen.Dongnipp.test
                         break;
                 }
             }
-            //Console.WriteLine("即将开始测试考试信息查询");
-            //Console.WriteLine("================================\n");
-            //Console.WriteLine("-------------分数查询-------------\n");
-            //Console.WriteLine("请输入欲查询考试的examId:");
-            //string score_examId = Console.ReadLine();
-            //Console.WriteLine("\n请输入欲查询科目的courseId (以半角逗号分割, 留空则代表取得默认科目或者全科总分):");
-            //string score_courseId = Console.ReadLine();
-            //Console.WriteLine("\n开始查询....");
-            //(string[] score_courseName, string[] score_stuScore, string[] score_exScore) = await dongniSDK.getScore(Token, userId, studentId, score_examId, schoolId, score_courseId);
-            //for(int i = 0; i< score_courseName.Length; i++)
-            //{
-            //    Console.WriteLine("\n*********************");
-            //    Console.WriteLine("科目: " + score_courseName[i]);
-            //    Console.WriteLine("本科目总分: " + score_exScore[i]);
-            //    Console.WriteLine("学生取得总分: " + score_stuScore[i]);
-            //    Console.WriteLine("*********************\n");
-            //}
-
-            //Console.WriteLine("\n-------------分数查询-------------");
         }
 
         private static async Task Logout()
@@ -136,6 +120,7 @@ namespace top.nuozhen.Dongnipp.test
                 s | 查询某次考试成绩。
                 g | 查询某次考试段排。
                 c | 查询某次考试班排。
+                u | 查询当前角色下所有科目名称与对应ID。
                 q | 退出登录并退出本程序。
 
                 ==============================================
@@ -199,6 +184,164 @@ namespace top.nuozhen.Dongnipp.test
         }
 
         private static async Task InquireExamScore()
+        {
+            DongnippSDK.DongniExam currentExam = await SelectExam();
+            Console.WriteLine("\n请输入需查询的科目courseId (留空则为默认科目, 可以使用命令u查询所有科目以及对应ID): ");
+            string inputCourseId = Console.ReadLine();
+            if (string.IsNullOrEmpty(inputCourseId))
+            {
+                inputCourseId = "0";
+            }
+            int courseId;
+            while (!int.TryParse(inputCourseId, out courseId))
+            {
+                Console.WriteLine("无法将输入的courseId转换为int类型, 请重新输入: ");
+                inputCourseId = Console.ReadLine();
+            }
+            Console.WriteLine("请输入查询的statId (留空自动获取默认值): ");
+            string statId = Console.ReadLine();
+            Console.WriteLine("\n正在获取成绩...");
+            string courseName;
+            string fullMark;
+            string totalScore;
+            if (string.IsNullOrEmpty(statId))
+            {
+                (fullMark, totalScore) = await currentExam.GetScore(courseId);
+                courseName = await currentExam.CourseIdToName(courseId);
+            }
+            else
+            {
+                (fullMark, totalScore) = await currentExam.GetScore(statId, courseId);
+                courseName = await currentExam.CourseIdToName(courseId, statId);
+            }
+            ConsoleColor originalForegroundColor = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.WriteLine($"""
+
+
+                {currentExam.ExamName}
+                =======================================================
+                   考生: {dongniUser.NickName}
+                   考试: {currentExam.ExamName} ({currentExam.ExamId})
+                   考试科目: {courseName} ({courseId})
+                   考试总分: {fullMark}
+                   考生得分: {totalScore}
+                =======================================================
+
+                """);
+            Console.ForegroundColor = originalForegroundColor;
+        }
+
+
+        private static async Task InquireExamGradeRanking()
+        {
+            DongnippSDK.DongniExam currentExam = await SelectExam();
+            Console.WriteLine("\n请输入需查询的科目courseId (留空则为默认科目, 可以使用命令u查询所有科目以及对应ID): ");
+            string inputCourseId = Console.ReadLine();
+            if (string.IsNullOrEmpty(inputCourseId))
+            {
+                inputCourseId = "0";
+            }
+            int courseId;
+            while (!int.TryParse(inputCourseId, out courseId)) {
+                Console.WriteLine("无法将输入的courseId转换为int类型, 请重新输入: ");
+                inputCourseId = Console.ReadLine();
+            }
+            Console.WriteLine("请输入查询的statId (留空自动获取默认值): ");
+            string statId = Console.ReadLine();
+            Console.WriteLine("\n正在获取年段排名...");
+            string examRanking;
+            string courseName;
+            if (string.IsNullOrEmpty(statId))
+            {
+                examRanking = await currentExam.GetExamRanking(courseId);
+                courseName = await currentExam.CourseIdToName(courseId);
+            }
+            else
+            {
+                examRanking = await currentExam.GetExamRanking(statId, courseId);
+                courseName = await currentExam.CourseIdToName(courseId, statId);
+            }
+            ConsoleColor originalForegroundColor = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.WriteLine($"""
+
+
+                {currentExam.ExamName}
+                =======================================================
+                   考生: {dongniUser.NickName}
+                   考试: {currentExam.ExamName} ({currentExam.ExamId})
+                   考试科目: {courseName} ({courseId})
+                   年段排名: {examRanking}
+                =======================================================
+
+                """);
+            Console.ForegroundColor = originalForegroundColor;
+
+        }
+
+        private static async Task InquireAllCoursesList()
+        {
+            Console.WriteLine("\n正在获取所有科目列表...");
+            DongnippSDK.DongniCourse[] allCourses = await currentRole.GetCoursesList();
+            Console.WriteLine("\n================================\n");
+            foreach (DongnippSDK.DongniCourse course in allCourses)
+            {
+                Console.WriteLine($"科目: {course.CourseName}");
+                Console.WriteLine($"  - ID: {course.CourseId}\n");
+            }
+            Console.WriteLine("\n================================\n");
+        }
+
+        private static async Task InquireExamClassRanking()
+        {
+            DongnippSDK.DongniExam currentExam = await SelectExam();
+            Console.WriteLine("\n请输入需查询的科目courseId (留空则为默认科目, 可以使用命令u查询所有科目以及对应ID): ");
+            string inputCourseId = Console.ReadLine();
+            if (string.IsNullOrEmpty(inputCourseId))
+            {
+                inputCourseId = "0";
+            }
+            int courseId;
+            while (!int.TryParse(inputCourseId, out courseId))
+            {
+                Console.WriteLine("无法将输入的courseId转换为int类型, 请重新输入: ");
+                inputCourseId = Console.ReadLine();
+            }
+            Console.WriteLine("请输入查询的statId (留空自动获取默认值): ");
+            string statId = Console.ReadLine();
+            Console.WriteLine("\n正在获取班级排名...");
+            string classRanking;
+            string courseName;
+            if (string.IsNullOrEmpty(statId))
+            {
+                classRanking = await currentExam.GetClassRanking(courseId);
+                courseName = await currentExam.CourseIdToName(courseId);
+            }
+            else
+            {
+                classRanking = await currentExam.GetClassRanking(statId, courseId);
+                courseName = await currentExam.CourseIdToName(courseId, statId);
+            }
+            ConsoleColor originalForegroundColor = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.WriteLine($"""
+
+
+                {currentExam.ExamName}
+                =======================================================
+                   考生: {dongniUser.NickName}
+                   考试: {currentExam.ExamName} ({currentExam.ExamId})
+                   考试科目: {courseName} ({courseId})
+                   班级排名: {classRanking}
+                =======================================================
+
+                """);
+            Console.ForegroundColor = originalForegroundColor;
+
+        }
+
+        private static async Task<DongnippSDK.DongniExam> SelectExam()
         {
             DongnippSDK.DongniExam currentExam;
         requireUserInput: Console.Write("""
@@ -290,37 +433,8 @@ namespace top.nuozhen.Dongnipp.test
                 default:
                     goto requireUserInput;  //要求用户重新选择
             }
-            Console.WriteLine("\n请输入需查询的科目courseId (多个用半角逗号分割, 留空则为默认科目): ");
-            string courseId = Console.ReadLine();
-            Console.WriteLine("请输入查询的statId (留空自动获取默认值): ");
-            string statId = Console.ReadLine();
-            Console.WriteLine("\n正在获取成绩...");
-            string[] courseIds = courseId.Split(",");
-            string fullMark = "Failed to get";
-            string totalScore = "Failed to get";
-            if (string.IsNullOrEmpty(statId))
-            {
-                (fullMark, totalScore) = await currentExam.GetScore(courseIds);
-            }
-            else
-            {
-                (fullMark, totalScore) = await currentExam.GetScore(statId, courseIds);
-            }
-            ConsoleColor originalForegroundColor = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.Magenta;
-            Console.WriteLine($"""
 
-
-                {currentExam.ExamName}
-                =======================================================
-                   考生: {dongniUser.NickName}
-                   考试: {currentExam.ExamName} ({currentExam.ExamId})
-                   考试总分: {fullMark}
-                   考生得分: {totalScore}
-                =======================================================
-
-                """);
-            Console.ForegroundColor = originalForegroundColor;
+            return currentExam;
         }
 
         private static async Task SelectRole()
@@ -364,6 +478,7 @@ namespace top.nuozhen.Dongnipp.test
             currentRole = await dongniUser.SelectRole(roleSort);
             Console.WriteLine($"\n已选择角色:  {currentRole.StudentId}");
         }
+
 
         static string ReadPassword()
         {

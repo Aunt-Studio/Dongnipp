@@ -449,6 +449,10 @@ namespace top.nuozhen.Dongnipp
 
                         return [firstExam, secondExam];
                     }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
                 }
                 catch (APIException ex)
                 {
@@ -494,16 +498,91 @@ namespace top.nuozhen.Dongnipp
                     }
                     else
                     {
-                        throw new APIException("Coursed by: Cannot get specified user information.\n\nRemote server responsed: " + response);
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
                     }
                 }
                 catch (APIException ex)
                 {
-                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniUser.SelectRole Method.", ex));
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniRole.GetList Method.", ex));
                 }
                 catch (Exception ex)
                 {
-                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.SelectRole Method.", ex));
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniRole.GetList Method.", ex));
+                }
+                return null;
+            }
+
+            public async Task<DongniCourse[]> GetCoursesList()
+            {
+                try
+                {
+                    string url = $"https://www.dongni100.com/api/base/data/system/account/relative/all?clientType=1&relativeId={RelativeId}&userId={User.UserId}&studentId={StudentId}";
+                    string response = await GetResponse(url, User.Token);
+                    WriteLog("DongniRole.GetCoursesList | RSRR: " + response, isDebug: true);
+
+                    WriteLog("DongniRole.GetCoursesList: Trying to parse...", isDebug: true);
+                    JObject json = JObject.Parse(response);
+                    if (json["status"].ToString() == "0")
+                    {
+                        JArray courseList = (JArray)json["data"]["course"];
+                        List<DongniCourse> dongniCourses = new List<DongniCourse>();
+                        foreach (JObject course in courseList.Cast<JObject>())
+                        {
+                            dongniCourses.Add(new DongniCourse(int.Parse((string)course["courseId"]), (string)course["courseName"]));
+                        }
+                        return dongniCourses.ToArray();
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniRole.CourseIdToName Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniRole.CourseIdToName Method.", ex));
+                }
+                return null;
+            }
+
+            public async Task<string> CourseIdToName(int courseId)
+            {
+                try
+                {
+                    string url = $"https://www.dongni100.com/api/base/data/export/course/common/all?clientType=1&schoolId={SchoolId}&userId={User.UserId}&studentId={StudentId}";
+                    string response = await GetResponse(url, User.Token);
+                    WriteLog("DongniRole.CourseIdToName | RSRR: " + response, isDebug: true);
+
+                    WriteLog("DongniRole.CourseIdToName: Trying to parse...", isDebug: true);
+                    JObject json = JObject.Parse(response);
+                    if (json["status"].ToString() == "0")
+                    {
+                        JArray courseList = (JArray)json["course"];
+                        foreach (JObject course in courseList.Cast<JObject>())
+                        {
+                            if ((string)course["courseId"] == courseId.ToString())
+                            {
+                                return (string)course["courseName"];
+                            }
+
+                        }
+                        throw new APIException("Coursed by: Cannot fetch specified course.\n\nRemote server responsed: " + response + "\n\nTarget courseId: " + courseId);
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniRole.CourseIdToName Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniRole.CourseIdToName Method.", ex));
                 }
                 return null;
             }
@@ -556,7 +635,8 @@ namespace top.nuozhen.Dongnipp
                 {
                     string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId=&examId={ExamId}&statId={await GetDefaultStatId()}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
-
+                    WriteLog("DongniExam.GetScore | RSRR: " + response, isDebug: true);
+                    WriteLog("DongniExam.GetScore: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"].ToString() == "0")
                     {
@@ -587,7 +667,8 @@ namespace top.nuozhen.Dongnipp
                 {
                     string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId=&examId={ExamId}&statId={statId}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
-
+                    WriteLog("DongniExam.GetScore | RSRR: " + response, isDebug: true);
+                    WriteLog("DongniExam.GetScore: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"].ToString() == "0")
                     {
@@ -611,19 +692,15 @@ namespace top.nuozhen.Dongnipp
                 }
                 return (null, null);
             }
-
-            public async Task<(string, string)> GetScore(string[] courseIds)
+            // 指定courseId要走不同的URL。。
+            public async Task<(string, string)> GetScore(int courseId)
             {
                 try
                 {
-                    string courseId = "";
-                    for (int i = 0; i < courseIds.Length; i++)
-                    {
-                        courseId += courseIds[i];
-                    }
                     string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId={courseId}&examId={ExamId}&statId={await GetDefaultStatId()}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
-
+                    WriteLog("DongniExam.GetScore | RSRR: " + response, isDebug: true);
+                    WriteLog("DongniExam.GetScore: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"].ToString() == "0")
                     {
@@ -648,18 +725,14 @@ namespace top.nuozhen.Dongnipp
                 return (null, null);
             }
 
-            public async Task<(string, string)> GetScore(string statId, string[] courseIds)
+            public async Task<(string, string)> GetScore(string statId, int courseId)
             {
                 try
                 {
-                    string courseId = "";
-                    for (int i = 0; i < courseIds.Length; i++)
-                    {
-                        courseId += courseIds[i];
-                    }
                     string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId={courseId}&examId={ExamId}&statId={statId}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
-
+                    WriteLog("DongniExam.GetScore | RSRR: " + response, isDebug: true);
+                    WriteLog("DongniExam.GetScore: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"].ToString() == "0")
                     {
@@ -690,7 +763,8 @@ namespace top.nuozhen.Dongnipp
                 {
                     string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={await GetDefaultStatId()}&courseId=&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
-
+                    WriteLog("DongniExam.GetExamRanking | RSRR: " + response, isDebug: true);
+                    WriteLog("DongniExam.GetExamRanking: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"].ToString() == "0")
                     {
@@ -721,7 +795,8 @@ namespace top.nuozhen.Dongnipp
                 {
                     string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={statId}&courseId=&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
-
+                    WriteLog("DongniExam.GetExamRanking | RSRR: " + response, isDebug: true);
+                    WriteLog("DongniExam.GetExamRanking: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"].ToString() == "0")
                     {
@@ -746,18 +821,14 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
-            public async Task<string> GetExamRanking(string[] courseIds)
+            public async Task<string> GetExamRanking(int courseId)
             {
                 try
                 {
-                    string courseId = "";
-                    for (int i = 0; i < courseIds.Length; i++)
-                    {
-                        courseId += courseIds[i];
-                    }
                     string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={await GetDefaultStatId()}&courseId={courseId}&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
-
+                    WriteLog("DongniExam.GetExamRanking | RSRR: " + response, isDebug: true);
+                    WriteLog("DongniExam.GetExamRanking: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"].ToString() == "0")
                     {
@@ -782,18 +853,14 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
-            public async Task<string> GetExamRanking(string statId, string[] courseIds)
+            public async Task<string> GetExamRanking(string statId, int courseId)
             {
                 try
                 {
-                    string courseId = "";
-                    for (int i = 0; i < courseIds.Length; i++)
-                    {
-                        courseId += courseIds[i];
-                    }
                     string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={statId}&courseId={courseId}&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
-
+                    WriteLog("DongniExam.GetExamRanking | RSRR: " + response, isDebug: true);
+                    WriteLog("DongniExam.GetExamRanking: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"].ToString() == "0")
                     {
@@ -818,6 +885,219 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            public async Task<string> GetClassRanking()
+            {
+                try
+                {
+                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={await GetDefaultStatId()}&courseId=&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string response = await GetResponse(url, Role.User.Token);
+                    WriteLog("DongniExam.GetClassRanking | RSRR: " + response, isDebug: true);
+                    WriteLog("DongniExam.GetClassRanking: Trying to parse...", isDebug: true);
+                    JObject json = JObject.Parse(response);
+                    if (json["status"].ToString() == "0")
+                    {
+                        // 检查是否存在examRanking键，如果没有则抛出异常
+                        JToken examRankingToken = json.SelectToken("data.list[0].classRanking") ?? throw new APIException("Coursed by: Cannot find classRanking value.Maybe unsupported.\n\nRemote server responsed: " + response);
+                        string examRanking = (string)json["data"]["list"][0]["classRanking"];
+                        return examRanking;
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniExam.GetClassRanking Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetClassRanking Method.", ex));
+                }
+                return null;
+            }
+
+            public async Task<string> GetClassRanking(string statId)
+            {
+                try
+                {
+                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={statId}&courseId=&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string response = await GetResponse(url, Role.User.Token);
+                    WriteLog("DongniExam.GetClassRanking | RSRR: " + response, isDebug: true);
+                    WriteLog("DongniExam.GetClassRanking: Trying to parse...", isDebug: true);
+                    JObject json = JObject.Parse(response);
+                    if (json["status"].ToString() == "0")
+                    {
+                        // 检查是否存在examRanking键，如果没有则抛出异常
+                        JToken examRankingToken = json.SelectToken("data.list[0].classRanking") ?? throw new APIException("Coursed by: Cannot find classRanking value.Maybe unsupported.\n\nRemote server responsed: " + response);
+                        string examRanking = (string)json["data"]["list"][0]["classRanking"];
+                        return examRanking;
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniExam.GetClassRanking Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetClassRanking Method.", ex));
+                }
+                return null;
+            }
+
+            public async Task<string> GetClassRanking(int courseId)
+            {
+                try
+                {
+                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={await GetDefaultStatId()}&courseId={courseId}&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string response = await GetResponse(url, Role.User.Token);
+                    WriteLog("DongniExam.GetClassRanking | RSRR: " + response, isDebug: true);
+                    WriteLog("DongniExam.GetClassRanking: Trying to parse...", isDebug: true);
+                    JObject json = JObject.Parse(response);
+                    if (json["status"].ToString() == "0")
+                    {
+                        // 检查是否存在examRanking键，如果没有则抛出异常
+                        JToken examRankingToken = json.SelectToken("data.list[0].classRanking") ?? throw new APIException("Coursed by: Cannot find classRanking value.Maybe unsupported.\n\nRemote server responsed: " + response);
+                        string examRanking = (string)json["data"]["list"][0]["classRanking"];
+                        return examRanking;
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniExam.GetClassRanking Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetClassRanking Method.", ex));
+                }
+                return null;
+            }
+
+            public async Task<string> GetClassRanking(string statId, int courseId)
+            {
+                try
+                {
+                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={statId}&courseId={courseId}&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string response = await GetResponse(url, Role.User.Token);
+                    WriteLog("DongniExam.GetClassRanking | RSRR: " + response, isDebug: true);
+                    WriteLog("DongniExam.GetClassRanking: Trying to parse...", isDebug: true);
+                    JObject json = JObject.Parse(response);
+                    if (json["status"].ToString() == "0")
+                    {
+                        // 检查是否存在examRanking键，如果没有则抛出异常
+                        JToken examRankingToken = json.SelectToken("data.list[0].classRanking") ?? throw new APIException("Coursed by: Cannot find classRanking value.Maybe unsupported.\n\nRemote server responsed: " + response);
+                        string examRanking = (string)json["data"]["list"][0]["classRanking"];
+                        return examRanking;
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniExam.GetClassRanking Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetClassRanking Method.", ex));
+                }
+                return null;
+            }
+
+            public async Task<string> CourseIdToName(int courseId)
+            {
+                try
+                {
+                    if (courseId == 0)
+                    {
+                        return "默认";
+                    }
+                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/courseInfo?clientType=1&examId={ExamId}&statId={await GetDefaultStatId()}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string response = await GetResponse(url, Role.User.Token);
+                    WriteLog("DongniExam.CourseIdToName | RSRR: " + response, isDebug: true);
+
+                    WriteLog("DongniExam.CourseIdToName: Trying to parse...", isDebug: true);
+                    JObject json = JObject.Parse(response);
+                    if (json["status"].ToString() == "0")
+                    {
+                        JArray courseList = (JArray)json["data"];
+                        foreach (JObject course in courseList.Cast<JObject>())
+                        {
+                            if ((string)course["courseId"] == courseId.ToString())
+                            {
+                                return (string)course["courseName"];
+                            }
+
+                        }
+                        throw new APIException("Coursed by: Cannot fetch specified course.\n\nRemote server responsed: " + response + "\n\nTarget courseId: " + courseId);
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniExam.CourseIdToName Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.CourseIdToName Method.", ex));
+                }
+                return null;
+            }
+            public async Task<string> CourseIdToName(int courseId, string statId)
+            {
+                try
+                {
+                    if (courseId == 0)
+                    {
+                        return "默认";
+                    }
+                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/courseInfo?clientType=1&examId={ExamId}&statId={statId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string response = await GetResponse(url, Role.User.Token);
+                    WriteLog("DongniExam.CourseIdToName | RSRR: " + response, isDebug: true);
+
+                    WriteLog("DongniExam.CourseIdToName: Trying to parse...", isDebug: true);
+                    JObject json = JObject.Parse(response);
+                    if (json["status"].ToString() == "0")
+                    {
+                        JArray courseList = (JArray)json["data"];
+                        foreach (JObject course in courseList.Cast<JObject>())
+                        {
+                            if ((string)course["courseId"] == courseId.ToString())
+                            {
+                                return (string)course["courseName"];
+                            }
+
+                        }
+                        throw new APIException("Coursed by: Cannot fetch specified course.\n\nRemote server responsed: " + response + "\n\nTarget courseId: " + courseId);
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responsed: " + response);
+                    }
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniExam.CourseIdToName Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.CourseIdToName Method.", ex));
+                }
+                return null;
+            }
+            
             private async Task<string> GetDefaultStatId()
             {
 
@@ -865,7 +1145,11 @@ namespace top.nuozhen.Dongnipp
             }
         }
 
-
+        public class DongniCourse(int courseId, string courseName)
+        {
+            public int CourseId { get; set; } = courseId;
+            public string CourseName { get; set; } = courseName;
+        }
 
 
         /// <summary>
