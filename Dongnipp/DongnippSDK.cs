@@ -41,7 +41,7 @@ namespace top.nuozhen.Dongnipp
             public bool IsLogon { get; private set; }
 
             /// <summary>
-            /// DongniUser 的构造函数，不应被外部直接调用，创建DongniUser 实例请使用Login()异步工厂方法。
+            /// DongniUser 的构造函数，不应被外部直接调用，创建 DongniUser 实例请使用Login()异步工厂方法。
             /// </summary>
             /// <param name="accountName"></param>
             /// <param name="token"></param>
@@ -56,6 +56,12 @@ namespace top.nuozhen.Dongnipp
                 this.IsLogon = true;
             }
 
+            /// <summary>
+            /// 登录到懂你平台，获得一个 DongniUser 实例。
+            /// </summary>
+            /// <param name="userName">用户名 (通常是手机号)</param>
+            /// <param name="password">明文密码</param>
+            /// <returns>DongniUser 实例</returns>
             public static async Task<DongniUser> Login(string userName, string password)
             {
                 string accountName = "";
@@ -109,6 +115,10 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 向懂你平台发送登出请求以销毁当前 DongniUser 实例中的 Token。
+            /// </summary>
+            /// <returns></returns>
             public async Task Logout()
             {
                 try
@@ -149,6 +159,10 @@ namespace top.nuozhen.Dongnipp
 
             }
 
+            /// <summary>
+            /// 获取当前用户的所有角色。
+            /// </summary>
+            /// <returns>DongniRole 实例数组</returns>
             public async Task<DongniRole[]> ListRole()
             {
 
@@ -206,6 +220,14 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 利用roleSort选择一个角色。
+            /// 
+            /// 将会先请求API枚举所有角色信息，并逐一匹配 roleSort 是否等于某个角色的 userSort。
+            /// 通常情况下 roleSort = 0 取得的是默认角色。
+            /// </summary>
+            /// <param name="roleSort">已转换为整数类型的 roleSort</param>
+            /// <returns>DongniRole 实例</returns>
             public async Task<DongniRole> SelectRole(int roleSort)
             {
 
@@ -273,6 +295,14 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 利用roleSort选择一个角色。
+            /// 
+            /// 将会先请求API枚举所有角色信息，并逐一匹配 roleSort 是否等于某个角色的 userSort。
+            /// 通常情况下 roleSort = "0" 取得的是默认角色。
+            /// </summary>
+            /// <param name="roleSort">字符串类型的 roleSort</param>
+            /// <returns>DongniRole 实例</returns>
             public async Task<DongniRole> SelectRole(string roleSort)
             {
 
@@ -340,6 +370,15 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 利用 roleSort 以及一个以 roleSort 为数组下标的DongniRole实例数组选择一个角色。需要与 ListRole() 方法配合使用。
+            /// 
+            /// 注意: 不推荐使用此方法。因为该方法可能会选择预期外的 DongniRole 实例。
+            /// 但该方法不需要联网。
+            /// </summary>
+            /// <param name="roleArrow">以 roleSort 为数组下标的 DongniRole 实例数组</param>
+            /// <param name="roleSort">已转换为整数类型的 roleSort</param>
+            /// <returns>roleArrow[roleSort]</returns>
             public static DongniRole SelectRole(DongniRole[] roleArrow, int roleSort)
             {
                 try
@@ -361,10 +400,35 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 利用 roleSort 以及一个以 roleSort 为数组下标的DongniRole实例数组选择一个角色。需要与 ListRole() 方法配合使用。
+            /// 
+            /// 注意: 不推荐使用此方法。因为该方法可能会选择预期外的 DongniRole 实例，并且类型转换错误将抛出异常。
+            /// 但该方法不需要联网。
+            /// </summary>
+            /// <param name="roleArrow">以 roleSort 为数组下标的 DongniRole 实例数组</param>
+            /// <param name="roleSort">字符串类型的 roleSort</param>
+            /// <returns>roleArrow[roleSort]</returns>
             public static DongniRole SelectRole(DongniRole[] roleArrow, string roleSort)
             {
-                int sort = int.Parse(roleSort);
-                return SelectRole(roleArrow, sort);
+                try
+                {
+                    int sort = 0;
+                    if (!int.TryParse(roleSort, out sort))
+                    {
+                        throw new APIException($"Coursed by: The passed parameter \"roleSort\" cannot be converted to an integer type.\nroleSort = {roleSort}");
+                    }
+                    return SelectRole(roleArrow, sort);
+                }
+                catch (APIException ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An API exception occurred at DongniUser.SelectRole Method.", ex));
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.SelectRole Method.", ex));
+                }
+                return null;
             }
 
 
@@ -397,6 +461,21 @@ namespace top.nuozhen.Dongnipp
             public string StudentName { get; }
             public string UserType { get; }
 
+            /// <summary>
+            /// DongniRole 的构造函数。通常不需要手动调用，但假如遇到无网情况可以通过这个方法从缓存中构造对象。
+            /// </summary>
+            /// <param name="user">角色所属的 DongniUser 实例</param>
+            /// <param name="roleSort"></param>
+            /// <param name="classId"></param>
+            /// <param name="className"></param>
+            /// <param name="gradeId"></param>
+            /// <param name="gradeName"></param>
+            /// <param name="relativeId"></param>
+            /// <param name="schoolId"></param>
+            /// <param name="schoolName"></param>
+            /// <param name="studentId"></param>
+            /// <param name="studentName"></param>
+            /// <param name="userType"></param>
             public DongniRole(DongniUser user, string roleSort, string classId, string className, string gradeId, string gradeName, string relativeId, string schoolId, string schoolName, string studentId, string studentName, string userType)
             {
                 this.User = user;
@@ -413,7 +492,10 @@ namespace top.nuozhen.Dongnipp
                 this.UserType = userType;
             }
 
-
+            /// <summary>
+            /// 获取最近两次的考试结果。
+            /// </summary>
+            /// <returns>DongniExam 实例数组</returns>
             public async Task<DongniExam[]> GetLatest()
             {
                 try
@@ -465,6 +547,10 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 获取该角色下所有考试结果。
+            /// </summary>
+            /// <returns>DongniExam 实例数组</returns>
             public async Task<DongniExam[]> GetList()
             {
                 try
@@ -512,6 +598,10 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 获取该角色下所有课程及其对应 ID。
+            /// </summary>
+            /// <returns>DongniCourse 实例对象，含了每个科目的名称、对应 courseId</returns>
             public async Task<DongniCourse[]> GetCoursesList()
             {
                 try
@@ -548,6 +638,11 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 利用 courseId 获得 courseName。
+            /// </summary>
+            /// <param name="courseId">已转换为整数类型的 courseId</param>
+            /// <returns></returns>
             public async Task<string> CourseIdToName(int courseId)
             {
                 try
@@ -607,16 +702,22 @@ namespace top.nuozhen.Dongnipp
             public string ExamId { get; }
             public string ExamName { get; }
             public string ExamType { get; }
+            /// <summary>
+            /// 开始时间，为13位北京时间时间戳
+            /// </summary>
             public string StartDate { get; }
+            /// <summary>
+            /// 结束时间，为13位北京时间时间戳
+            /// </summary>
             public string EndDate { get; }
 
             /// <summary>
-            /// 构造一个DongniExam。
+            /// DongniExam 的构造函数。通常不需要手动调用，但假如遇到无网情况可以通过这个方法从缓存中构造对象。
             /// </summary>
-            /// <param name="role">该Exam所属的DongniRole</param>
+            /// <param name="role">该考试所属的角色</param>
             /// <param name="examId"></param>
             /// <param name="examName"></param>
-            /// <param name="examType">考试类型ID</param>
+            /// <param name="examType">考试类型 ID</param>
             /// <param name="startDate">开始时间，为13位北京时间时间戳</param>
             /// <param name="endDate">结束时间，为13位北京时间时间戳</param>
             public DongniExam(DongniRole role, string examId, string examName, string examType, string startDate, string endDate)
@@ -629,6 +730,10 @@ namespace top.nuozhen.Dongnipp
                 this.EndDate = endDate;
             }
 
+            /// <summary>
+            /// 获取默认科目、默认 statId 的考试分数。
+            /// </summary>
+            /// <returns>(满分, 考生得分)</returns>
             public async Task<(string, string)> GetScore()
             {
                 try
@@ -661,6 +766,11 @@ namespace top.nuozhen.Dongnipp
                 return (null, null);
             }
 
+            /// <summary>
+            /// 获取默认科目、指定 statId 的考试分数。
+            /// </summary>
+            /// <param name="statId">字符串类型的 statId</param>
+            /// <returns>(满分, 考生得分)</returns>
             public async Task<(string, string)> GetScore(string statId)
             {
                 try
@@ -692,20 +802,26 @@ namespace top.nuozhen.Dongnipp
                 }
                 return (null, null);
             }
-            // 指定courseId要走不同的URL。。
+
+            /// <summary>
+            /// 获取指定科目、默认 statId 的考试分数。
+            /// </summary>
+            /// <param name="courseId">已转换为整数类型的courseId</param>
+            /// <returns>(满分, 考生得分)</returns>
             public async Task<(string, string)> GetScore(int courseId)
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId={courseId}&examId={ExamId}&statId={await GetDefaultStatId()}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/course/scoreSection?clientType=1&courseId={courseId}&examId={ExamId}&statId={await GetDefaultStatId()}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    // 指定courseId 必须走这个接口URL
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetScore | RSRR: " + response, isDebug: true);
                     WriteLog("DongniExam.GetScore: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"].ToString() == "0")
                     {
-                        string fullMark = (string)json["data"]["fullMark"];
-                        string totalScore = (string)json["data"]["totalScore"];
+                        string fullMark = (string)json["data"][0]["fullMark"];
+                        string totalScore = (string)json["data"][0]["totalScore"];
 
                         return (fullMark, totalScore);
                     }
@@ -725,19 +841,25 @@ namespace top.nuozhen.Dongnipp
                 return (null, null);
             }
 
+            /// <summary>
+            /// 获取指定科目、指定 statId 的考试分数。
+            /// </summary>
+            /// <param name="statId">字符串类型的 statId</param>
+            /// <param name="courseId">已转换为整数类型的courseId</param>
+            /// <returns>(满分, 考生得分)</returns>
             public async Task<(string, string)> GetScore(string statId, int courseId)
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId={courseId}&examId={ExamId}&statId={statId}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/course/scoreSection?clientType=1&courseId={courseId}&examId={ExamId}&statId={statId}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetScore | RSRR: " + response, isDebug: true);
                     WriteLog("DongniExam.GetScore: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"].ToString() == "0")
                     {
-                        string fullMark = (string)json["data"]["fullMark"];
-                        string totalScore = (string)json["data"]["totalScore"];
+                        string fullMark = (string)json["data"][0]["fullMark"];
+                        string totalScore = (string)json["data"][0]["totalScore"];
 
                         return (fullMark, totalScore);
                     }
@@ -757,6 +879,10 @@ namespace top.nuozhen.Dongnipp
                 return (null, null);
             }
 
+            /// <summary>
+            /// 获取默认科目、默认 statId 的考试(年段)排名。
+            /// </summary>
+            /// <returns>examRanking 值，通常是年段排名</returns>
             public async Task<string> GetExamRanking()
             {
                 try
@@ -789,6 +915,11 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 获取默认科目、指定 statId 的考试(年段)排名。
+            /// </summary>
+            /// <param name="statId">字符串类型的 statId</param>
+            /// <returns>examRanking 值，通常是年段排名</returns>
             public async Task<string> GetExamRanking(string statId)
             {
                 try
@@ -821,6 +952,11 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 获取指定科目、默认 statId 的考试(年段)排名。
+            /// </summary>
+            /// <param name="courseId">已转换为整数类型的 courseId</param>
+            /// <returns>examRanking 值，通常是年段排名</returns>
             public async Task<string> GetExamRanking(int courseId)
             {
                 try
@@ -853,6 +989,12 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 获取指定科目、指定 statId 的考试(年段)排名。
+            /// </summary>
+            /// <param name="statId">字符串类型的 statId</param>
+            /// <param name="courseId">已转换为整数类型的 courseId</param>
+            /// <returns>examRanking 值，通常是年段排名</returns>
             public async Task<string> GetExamRanking(string statId, int courseId)
             {
                 try
@@ -885,6 +1027,10 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 获取默认科目、默认 statId 的班级排名。
+            /// </summary>
+            /// <returns>classRanking 值，通常是班级排名</returns>
             public async Task<string> GetClassRanking()
             {
                 try
@@ -917,6 +1063,11 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 获取默认科目、指定 statId 的班级排名。
+            /// </summary>
+            /// <param name="statId">字符串类型的 statId</param>
+            /// <returns>classRanking 值，通常是班级排名</returns>
             public async Task<string> GetClassRanking(string statId)
             {
                 try
@@ -949,6 +1100,11 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 获取指定科目、默认 statId 的班级排名。
+            /// </summary>
+            /// <param name="courseId">已转换为整数类型的 courseId</param>
+            /// <returns>classRanking 值，通常是班级排名</returns>
             public async Task<string> GetClassRanking(int courseId)
             {
                 try
@@ -981,6 +1137,12 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 获取默认科目、默认 statId 的班级排名。
+            /// </summary>
+            /// <param name="statId">字符串类型的 statId</param>
+            /// <param name="courseId">已转换为整数类型的 courseId</param>
+            /// <returns>classRanking 值，通常是班级排名</returns>
             public async Task<string> GetClassRanking(string statId, int courseId)
             {
                 try
@@ -1013,6 +1175,12 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
 
+            /// <summary>
+            /// 利用 courseId 以及默认的 statId 获得 courseName。
+            /// 该方法只会请求 API 枚举当前考试下的所有科目，针对性较强，因此对于已知考试对象的查询，该方法相对 DongniRole 内的同名方法效率更高。
+            /// </summary>
+            /// <param name="courseId">已转换为整数类型的 courseId</param>
+            /// <returns>对应科目的中文名称</returns>
             public async Task<string> CourseIdToName(int courseId)
             {
                 try
@@ -1055,6 +1223,14 @@ namespace top.nuozhen.Dongnipp
                 }
                 return null;
             }
+
+            /// <summary>
+            /// 利用 courseId 以及指定的 statId 获得 courseName。
+            /// 该方法只会请求 API 枚举当前考试下的所有科目，针对性较强，因此对于已知考试对象的查询，该方法相对 DongniRole 内的同名方法效率更高。
+            /// </summary>
+            /// <param name="courseId">已转换为整数类型的 courseId</param>
+            /// <param name="statId">字符串类型的 statId</param>
+            /// <returns>对应科目的中文名称</returns>
             public async Task<string> CourseIdToName(int courseId, string statId)
             {
                 try
@@ -1098,6 +1274,10 @@ namespace top.nuozhen.Dongnipp
                 return null;
             }
             
+            /// <summary>
+            /// 获取该考试默认的 statId。该值将在一些未指定 statId 参数的方法中替代缺省的 statId 来拼接接口 URL。
+            /// </summary>
+            /// <returns>字符串类型的 statId</returns>
             private async Task<string> GetDefaultStatId()
             {
 
