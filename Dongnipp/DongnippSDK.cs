@@ -24,7 +24,7 @@ namespace top.nuozhen.Dongnipp
                              __/ |                                               
                             |___/                                                
     Dongni++ SDK
-    V0.0.0 Developing
+    V1.0.0 Stable
     Developed by Aunt Studio
     Learn more: https://github.com/Aunt-Studio/Dongnipp
     */
@@ -41,7 +41,7 @@ namespace top.nuozhen.Dongnipp
         /// <summary>
         /// SDK 版本号。
         /// </summary>
-        public static string Version = "V0.0.0 Developing";
+        public static string Version = "V1.0.0 Stable";
 
         /// <summary>
         /// <see cref="DongniUser"/> 类，用于封装一个已登录的懂你平台用户。

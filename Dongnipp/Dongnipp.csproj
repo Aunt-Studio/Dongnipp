@@ -12,15 +12,9 @@
     <CheckForOverflowUnderflow>True</CheckForOverflowUnderflow>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="DongnippSDK.bak.cs" />
-  </ItemGroup>
-  <ItemGroup>
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
     <PackageReference Include="System.ComponentModel.Composition" Version="9.0.0-preview.7.24405.7" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Remove="DongnippSDK.bak.cs" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Properties\" />

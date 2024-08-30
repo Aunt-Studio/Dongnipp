@@ -34,7 +34,7 @@
     <IndentHtml>False</IndentHtml>
     <BuildAssemblerVerbosity>OnlyWarningsAndErrors</BuildAssemblerVerbosity>
     <SaveComponentCacheCapacity>100</SaveComponentCacheCapacity>
-    <HelpTitle>Dongni++ SDK 帮助文档</HelpTitle>
+    <HelpTitle>Dongni++ SDK 开发帮助文档</HelpTitle>
     <HelpFileVersion>1.0.0.0</HelpFileVersion>
     <NamingMethod>MemberName</NamingMethod>
     <ContentPlacement>AboveNamespaces</ContentPlacement>
@@ -52,7 +52,7 @@
     <CopyrightHref>https://github.com/Aunt-Studio/Dongnipp/blob/master/LICENSE.txt</CopyrightHref>
     <CopyrightText>Copyright &amp;#169%3b Aunt Studio | Under MIT License</CopyrightText>
     <NamespaceSummaries>
-      <NamespaceSummaryItem name="top.nuozhen.Dongnipp" isDocumented="True" xmlns="" />
+      <NamespaceSummaryItem name="top.nuozhen.Dongnipp" isDocumented="True">Dongni++ SDK 命名空间。包含了Dongni++ SDK 所有类、方法等以及依赖对象。</NamespaceSummaryItem>
     </NamespaceSummaries>
     <WarnOnMissingSourceContext>False</WarnOnMissingSourceContext>
   </PropertyGroup>
