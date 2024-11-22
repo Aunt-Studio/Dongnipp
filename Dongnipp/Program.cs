@@ -4,8 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-// This is just a TESTING file!!!
-namespace top.nuozhen.Dongnipp.ConsoleProgram
+
+namespace com.auntstudio.Dongnipp.ConsoleProgram
 {
     internal class Program
     {
