@@ -14,7 +14,17 @@
     <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
     <Copyright>2024 © Aunt Studio</Copyright>
     <Version>1.1.0</Version>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/Aunt-Studio/Dongnipp</RepositoryUrl>
+    <Description>包含Dongni++ SDK 的 NuGet 包。</Description>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\Aunt-Studio\Dongnipp-CLI\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
