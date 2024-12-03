@@ -8,15 +8,17 @@
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageId>com.AuntStudio.Dongnipp</PackageId>
     <Title>Dongni++</Title>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
+    <AssemblyVersion>1.1.1.0</AssemblyVersion>
+    <FileVersion>1.1.1.0</FileVersion>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
     <Copyright>2024 © Aunt Studio</Copyright>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/Aunt-Studio/Dongnipp</RepositoryUrl>
     <Description>包含Dongni++ SDK 的 NuGet 包。</Description>
+    <Authors>Aunt_nuozhen</Authors>
+    <Company>Aunt Studio</Company>
   </PropertyGroup>
 
   <ItemGroup>

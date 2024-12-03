@@ -32,7 +32,7 @@ namespace com.auntstudio.Dongnipp.SDK
     /// <summary>
     /// Dongni++ SDK 主类。
     /// </summary>
-    class DongnippSDK
+    public class DongnippSDK
     {
         /// <summary>
         /// 调试信息输出开关，控制是否在控制台中输出调试信息。
@@ -466,6 +466,10 @@ namespace com.auntstudio.Dongnipp.SDK
             }
 
 
+            /// <summary>
+            /// 枚举类的信息和属性等。
+            /// </summary>
+            /// <returns>类的名称、所属命名空间、所有属性列表。</returns>
             public override string ToString()
             {
                 Type type = this.GetType();
@@ -759,6 +763,10 @@ namespace com.auntstudio.Dongnipp.SDK
                 return null;
             }
 
+            /// <summary>
+            /// 枚举类的信息和属性等。
+            /// </summary>
+            /// <returns>类的名称、所属命名空间、所有属性列表。</returns>
             public override string ToString()
             {
                 Type type = this.GetType();
@@ -1403,6 +1411,10 @@ namespace com.auntstudio.Dongnipp.SDK
                 return null;
             }
 
+            /// <summary>
+            /// 枚举类的信息和属性等。
+            /// </summary>
+            /// <returns>类的名称、所属命名空间、所有属性列表。</returns>
             public override string ToString()
             {
                 Type type = this.GetType();
@@ -1424,7 +1436,14 @@ namespace com.auntstudio.Dongnipp.SDK
         /// <param name="courseName">科目的中文名称</param>
         public class DongniCourse(int courseId, string courseName)
         {
+            /// <summary>
+            /// 科目对应的 CourseId。
+            /// </summary>
             public int CourseId { get; set; } = courseId;
+
+            /// <summary>
+            /// 科目中文名称。
+            /// </summary>
             public string CourseName { get; set; } = courseName;
         }
 
