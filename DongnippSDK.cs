@@ -3,14 +3,10 @@ using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.Security;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http;
+using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace com.auntstudio.Dongnipp.SDK
 {
@@ -24,7 +20,7 @@ namespace com.auntstudio.Dongnipp.SDK
                              __/ |                                               
                             |___/                                                
     Dongni++ SDK
-    V1.1.0 Stable
+    V2.0.0 Stable
     Developed by Aunt Studio
     Learn more: https://github.com/Aunt-Studio/Dongnipp
     */
@@ -35,13 +31,25 @@ namespace com.auntstudio.Dongnipp.SDK
     public class DongnippSDK
     {
         /// <summary>
+        /// 定义一个委托，用于自定义日志输出方法。
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="eventType"></param>
+        /// <param name="isDebug"></param>
+        public delegate void LogHandler(string message, string eventType, bool isDebug);
+        /// <summary>
+        /// 存储自定义日志输出方法的静态字段。
+        /// </summary>
+        public static LogHandler CustomLogHandler;
+
+        /// <summary>
         /// 调试信息输出开关，控制是否在控制台中输出调试信息。
         /// </summary>
         public static bool debugging;
         /// <summary>
         /// SDK 版本号。
         /// </summary>
-        public static string Version = "V1.1.0 Stable";
+        public static string Version = "V2.0.0 Stable";
 
         /// <summary>
         /// <see cref="DongniUser"/> 类，用于封装一个已登录的懂你平台用户。
@@ -1506,14 +1514,22 @@ namespace com.auntstudio.Dongnipp.SDK
         /// <param name="isDebug">是否是Debug类型。如果为true，则仅在全局debugging == true时输出。默认为false。</param>
         private static void WriteLog(string message, string eventType = "INFO", bool isDebug = false)
         {
-            if (isDebug && debugging)
+            if (CustomLogHandler is not null)
             {
-                Console.WriteLine($"[Debug / {eventType}] " + message);
+                CustomLogHandler(message, eventType, isDebug);
             }
-            else if (!isDebug)
+            else
             {
-                Console.WriteLine($"[{eventType}]" + message);
+                if (isDebug && debugging)
+                {
+                    Debug.WriteLine($"[Debug / {eventType}] " + message);
+                }
+                else if (!isDebug)
+                {
+                    Debug.WriteLine($"[{eventType}]" + message);
+                }
             }
+
 
         }
         /// <summary>
