@@ -7,6 +7,10 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using ICSharpCode.SharpZipLib.GZip;
+using Org.BouncyCastle.Ocsp;
+using Microsoft.Extensions.Caching.Memory;
+using System.Net.Http.Headers;
 
 namespace com.auntstudio.Dongnipp.SDK
 {
@@ -20,7 +24,7 @@ namespace com.auntstudio.Dongnipp.SDK
                              __/ |                                               
                             |___/                                                
     Dongni++ SDK
-    V2.0.0 Stable
+    V4.0.11 Stable
     Developed by Aunt Studio
     Learn more: https://github.com/Aunt-Studio/Dongnipp
     */
@@ -40,7 +44,7 @@ namespace com.auntstudio.Dongnipp.SDK
         /// <summary>
         /// 存储自定义日志输出方法的静态字段。
         /// </summary>
-        public static LogHandler CustomLogHandler;
+        public static LogHandler? CustomLogHandler;
 
         /// <summary>
         /// 调试信息输出开关，控制是否在控制台中输出调试信息。
@@ -49,7 +53,54 @@ namespace com.auntstudio.Dongnipp.SDK
         /// <summary>
         /// SDK 版本号。
         /// </summary>
-        public static string Version = "V2.0.0 Stable";
+        public static string Version = "V4.0.11 Stable";
+
+        private static APIException BuildMissingFieldException(string fieldName, string serverResponse)
+        {
+            return new APIException($"Coursed by: Failed to retrieve {fieldName}.\n\nRemote server responded: {serverResponse}");
+        }
+
+        private static string RequireString(JToken? token, string fieldName, string serverResponse)
+        {
+            var value = token?.ToString();
+            if (string.IsNullOrEmpty(value))
+            {
+                throw BuildMissingFieldException(fieldName, serverResponse);
+            }
+
+            return value;
+        }
+
+        private static JObject RequireObject(JToken? token, string fieldName, string serverResponse)
+        {
+            if (token is not JObject jsonObject)
+            {
+                throw BuildMissingFieldException(fieldName, serverResponse);
+            }
+
+            return jsonObject;
+        }
+
+        private static JArray RequireArray(JToken? token, string fieldName, string serverResponse)
+        {
+            if (token is not JArray jsonArray)
+            {
+                throw BuildMissingFieldException(fieldName, serverResponse);
+            }
+
+            return jsonArray;
+        }
+
+        private static int RequireInt(JToken? token, string fieldName, string serverResponse)
+        {
+            var value = RequireString(token, fieldName, serverResponse);
+            if (!int.TryParse(value, out var number))
+            {
+                throw new APIException($"Coursed by: {fieldName} is not a valid integer.\n\nRemote server responded: {serverResponse}");
+            }
+
+            return number;
+        }
 
         /// <summary>
         /// <see cref="DongniUser"/> 类，用于封装一个已登录的懂你平台用户。
@@ -81,6 +132,19 @@ namespace com.auntstudio.Dongnipp.SDK
             /// 预留的登录状态。
             /// </summary>
             public bool IsLogon { get; private set; }
+            /// <summary>
+            /// 该用户是否升级了好专业平台。
+            /// </summary>
+            public bool IsNiceZhuanye { get; private set; }
+            /// <summary>
+            /// 全局懂你平台 API 接口地址。
+            /// <para>
+            /// 通常是 https://www.dongni100.com ,但如果学校升级了好专业平台, 可能为 https://nicezhuanye.dongni100.com。
+            /// </para>
+            /// 如果学校有私有 Endpoint 也可以修改该属性。
+            /// </summary>
+            public string ApiEndpoint { get; private set; }
+
 
             /// <summary>
             /// <see cref="DongniUser"/> 的构造函数，不应被外部直接调用，创建 <see cref="DongniUser"/> 实例请使用 <see cref="Login"/> 异步工厂方法。
@@ -89,14 +153,19 @@ namespace com.auntstudio.Dongnipp.SDK
             /// <param name="token"></param>
             /// <param name="nickName"></param>
             /// <param name="userId"></param>
-            private DongniUser(string accountName, string token, string nickName, string userId)
+            /// <param name="apiEndpoint"></param>
+            /// <param name="isNiceZhuanye"></param>
+            private DongniUser(string accountName, string token, string nickName, string userId, string apiEndpoint, bool isNiceZhuanye = false)
             {
                 this.AccountName = accountName;
                 this.Token = token;
                 this.NickName = nickName;
                 this.UserId = userId;
                 this.IsLogon = true;
+                ApiEndpoint = apiEndpoint;
+                IsNiceZhuanye = isNiceZhuanye;
             }
+
 
             /// <summary>
             /// 登录到懂你平台，获得一个 <see cref="DongniUser"/> 实例。
@@ -104,39 +173,58 @@ namespace com.auntstudio.Dongnipp.SDK
             /// <param name="userName">用户名 (通常是手机号)</param>
             /// <param name="password">明文密码</param>
             /// <returns>DongniUser 实例</returns>
-            public static async Task<DongniUser> Login(string userName, string password)
+            public static async Task<DongniUser?> Login(string userName, string password)
             {
-                string accountName = "";
-                string token = "";
-                string nickName = "";    //这里的 nickName 是接口返回的 userName，通常是学生姓名
-                string userId = "";
-
                 try
                 {
-                    string encUserName;
-                    string encPassword;
-                    string postContent;
-                    string serverResponse;
+                    ArgumentException.ThrowIfNullOrWhiteSpace(userName);
+                    ArgumentException.ThrowIfNullOrWhiteSpace(password);
+
+                    string apiEndpoint = "https://www.dongni100.com";
 
                     RSAParameters dongniPublicKey = RSAUtils.GetPublicKeyParameters(PublicKey);
 
-                    encUserName = RSAUtils.EncryptToBase64(dongniPublicKey, Encoding.Default.GetBytes(userName));
-                    encPassword = RSAUtils.EncryptToBase64(dongniPublicKey, Encoding.Default.GetBytes(password));
+                    string encUserName = RSAUtils.EncryptToBase64(dongniPublicKey, Encoding.Default.GetBytes(userName));
+                    string encPassword = RSAUtils.EncryptToBase64(dongniPublicKey, Encoding.Default.GetBytes(password));
 
-                    postContent = "{\"accountName\":\"" + encUserName + "\",\"password\":\"" + encPassword + "\",\"validate\":null,\"userId\":null,\"clientType\":1}";
-                    serverResponse = await PostRequest("https://www.dongni100.com/api/base/data/encrypt/login", postContent, "application/json");
+                    string postContent = "{\"accountName\":\"" + encUserName + "\",\"password\":\"" + encPassword + "\",\"validate\":null,\"userId\":null,\"clientType\":1}";
+                    string serverResponse = await PostRequest("https://www.dongni100.com/api/base/data/encrypt/login", postContent, "application/json");
 
                     WriteLog("DongniUser.Login | RSRR: " + serverResponse, isDebug: true);
 
                     JObject json = JObject.Parse(serverResponse);
 
 
+                    string accountName = string.Empty;
+                    string token = string.Empty;
+                    string nickName = string.Empty;    //这里的 nickName 是接口返回的 userName，通常是学生姓名
+                    string userId = string.Empty;
+                    bool isNiceZhuanye = false;
                     if (json["status"]?.ToString() == "0")
                     {
-                        token = json["data"]?["dongniLoginToken"]?.ToString();
-                        accountName = json["data"]?["accountName"]?.ToString();
-                        nickName = json["data"]?["userName"]?.ToString();
-                        userId = json["data"]?["userId"]?.ToString();
+                        var data = RequireObject(json["data"], "data", serverResponse);
+                        if (data["hzyFlag"]?.Value<bool>() == true)
+                        {
+                            // 学校升级好专业平台，切换 API Endpoint。
+                            apiEndpoint = "https://nicezhuanye.dongni100.com";
+                            isNiceZhuanye = true;
+                            var hzyUser = await HzyLogin(userName, password)
+                                ?? throw BuildMissingFieldException("hzyUser", serverResponse);
+                            WriteLog("DongniUser.Login | Your school has updated to Nicezhuanye platform, which has an other API endpoint.");
+                            WriteLog("DongniUser.Login | API Endpoint switched to: " + apiEndpoint, isDebug: true);
+                            return await hzyUser.ToDongniUser(hzyUser.RoleType);
+                        }
+                        else if (data["dongniLoginToken"] is not null)
+                        {
+                            token = RequireString(data["dongniLoginToken"], "data.dongniLoginToken", serverResponse);
+                            accountName = RequireString(data["accountName"], "data.accountName", serverResponse);
+                            nickName = RequireString(data["userName"], "data.userName", serverResponse);
+                            userId = RequireString(data["userId"], "data.userId", serverResponse);
+                        }
+                        else
+                        {
+                            throw new APIException("Coursed by: Failed to retrieve login information.\n\nRemote server responded: " + serverResponse);
+                        }
 
                     }
                     else
@@ -144,7 +232,7 @@ namespace com.auntstudio.Dongnipp.SDK
                         throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responded: " + serverResponse);
 
                     }
-                    return new DongniUser(accountName, token, nickName, userId);
+                    return new DongniUser(accountName, token, nickName, userId, apiEndpoint, isNiceZhuanye);
                 }
                 catch (APIException ex)
                 {
@@ -156,6 +244,308 @@ namespace com.auntstudio.Dongnipp.SDK
                 }
                 return null;
             }
+            enum RoleType
+            {
+                Student = 0,
+                Parent = 2
+            }
+
+            private DongniRole BuildRoleFromJson(JObject user, string serverResponse)
+            {
+                return new DongniRole(
+                    this,
+                    RequireString(user["userSort"], "userSort", serverResponse),
+                    RequireString(user["classId"], "classId", serverResponse),
+                    RequireString(user["className"], "className", serverResponse),
+                    RequireString(user["gradeId"], "gradeId", serverResponse),
+                    RequireString(user["gradeName"], "gradeName", serverResponse),
+                    RequireString(user["relativeId"], "relativeId", serverResponse),
+                    RequireString(user["schoolId"], "schoolId", serverResponse),
+                    RequireString(user["schoolName"], "schoolName", serverResponse),
+                    RequireString(user["studentId"], "studentId", serverResponse),
+                    RequireString(user["studentName"], "studentName", serverResponse),
+                    RequireString(user["userType"], "userType", serverResponse)
+                );
+            }
+
+            private class HzyUser
+            {
+                /// <summary>
+                /// 好专业平台的 UserId
+                /// </summary>
+                public required string UserId { get; set; }
+                /// <summary>
+                /// 好专业平台用户所属的地区 ID
+                /// </summary>
+                public required string RegionId { get; set; }
+                /// <summary>
+                /// 好专业平台用户所属的分校 ID
+                /// </summary>
+                public required string BranchId { get; set; }
+                /// <summary>
+                /// 好专业平台用户所属的学校 ID
+                /// </summary>
+                public required string SchoolId { get; set; }
+                /// <summary>
+                /// 好专业平台用户所属的年段 ID
+                /// </summary>
+                public required string GradeId { get; set; }
+                /// <summary>
+                /// 好专业平台用户 System ID，我这里是学籍号
+                /// </summary>
+                public required string SystemId { get; set; }
+                /// <summary>
+                /// 好专业平台用户 accessToken
+                /// </summary>
+                public required string Token { get; set; }
+                /// <summary>
+                /// 用户身份类别。
+                /// </summary>
+                public required RoleType RoleType { get; set; }
+
+                public async Task<string?> GetTicketAsync(RoleType? roleType = null)
+                {
+                    if (roleType is not null)
+                    {
+                        RoleType = roleType.Value;
+                    }
+                    string roleTypeStr = RoleType switch
+                    {
+                        RoleType.Student => "Student",
+                        RoleType.Parent => "Parent",
+                        _ => throw new APIException("Coursed by: Invalid role type.")
+                    };
+                    // 构造请求 json
+                    JObject parameterJson = new()
+                    {
+                        ["UserID"] = UserId,
+                        ["RegionID"] = RegionId,
+                        ["branchId"] = BranchId,
+                        ["SchoolID"] = SchoolId,
+                        ["gradeId"] = GradeId,
+                        ["SystemID"] = SystemId,
+                        ["token"] = Token,
+                        ["parameter"] = new JObject
+                        {
+                            ["userID"] = UserId,
+                            ["roleType"] = roleTypeStr
+                        }
+                    };
+                    var url = $"https://school.nicezhuanye.com/nicezhuanye/ssoLogin/getTicket?t={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+                    var response = await PostRequest(url, parameterJson.ToString(), "application/json");
+                    var responseJson = JObject.Parse(response);
+                    if (responseJson["code"]?.ToString() == "0")
+                    {
+                        return responseJson["result"]?.ToString();
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Failed to retrieve ticket from Nicezhuanye platform.\n\nRemote server responded: " + response);
+                    }
+                }
+
+                public async Task<DongniUser> ToDongniUser(RoleType roleType)
+                {
+                    var ticket = await GetTicketAsync(roleType)
+                        ?? throw new APIException("Coursed by: Failed to retrieve ticket from Nicezhuanye platform.");
+                    JObject ssoParameterJson = new()
+                    {
+                        ["dictKey"] = "nicezhuanye",
+                        ["ticket"] = ticket,
+                        ["clientType"] = "1"
+                    };
+
+                    var url = "https://nicezhuanye.dongni100.com/api/base/data/system/auth/sso";
+                    var ssoResponse = await PostRequest(url, ssoParameterJson.ToString(), "application/json");
+                    var ssoResponseJson = JObject.Parse(ssoResponse);
+                    if (ssoResponseJson["status"]?.ToString() == "0")
+                    {
+                        var data = ssoResponseJson["data"];
+                        return new DongniUser(
+                            accountName: data?["accountName"]?.ToString() ?? throw new APIException("Coursed by: Failed to retrieve accountName from Dongni platform.\n\nRemote server responded: " + ssoResponse),
+                            token: data?["dongniLoginToken"]?.ToString() ?? throw new APIException("Coursed by: Failed to retrieve dongniLoginToken from Dongni platform.\n\nRemote server responded: " + ssoResponse),
+                            nickName: data?["userName"]?.ToString() ?? throw new APIException("Coursed by: Failed to retrieve userName from Dongni platform.\n\nRemote server responded: " + ssoResponse),
+                            userId: data?["userId"]?.ToString() ?? throw new APIException("Coursed by: Failed to retrieve userId from Dongni platform.\n\nRemote server responded: " + ssoResponse),
+                            apiEndpoint: "https://nicezhuanye.dongni100.com",
+                            isNiceZhuanye: true
+                        );
+                    }
+                    else
+                    {
+                        throw new APIException("Coursed by: Failed to retrieve login information from Dongni platform.\n\nRemote server responded: " + ssoResponse);
+                    }
+                }
+            }
+
+            /// <summary>
+            /// 从好专业平台登录。返回<seealso cref="HzyUser"/>.
+            /// </summary>
+            /// <param name="cellPhone">手机号</param>
+            /// <param name="password">密码</param>
+            /// <returns></returns>
+            private static async Task<HzyUser> HzyLogin(string cellPhone, string password)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(cellPhone);
+                ArgumentException.ThrowIfNullOrWhiteSpace(password);
+
+                // 构造 parameter json
+                JObject parameterJson = new JObject
+                {
+                    ["parameter"] = new JObject
+                    {
+                        ["cellphone"] = cellPhone,
+                        ["pwd"] = password,
+                        ["saveCookie"] = false
+                    }
+                };
+
+
+                var loginResponse = await PostRequest("https://school.nicezhuanye.com/loginserv/login/login", parameterJson.ToString(),
+                                                      "application/json");
+                WriteLog("HzyLogin | RSRR: " + loginResponse, isDebug: true);
+
+                var loginJson = JObject.Parse(loginResponse);
+
+                var users = RequireArray(loginJson["result"]?["userList"], "result.userList", loginJson.ToString());
+                Console.WriteLine("hzyLogin | Users Count: " + users.Count);
+                foreach (var user in users)
+                {
+                    Console.WriteLine("hzyLogin | User Info: " + user.ToString());
+                }
+                // 选第一个用户 我也不知道多用户怎么触发的
+                var firstUser = users[0];
+                if (firstUser is not null)
+                {
+                    var hzyUser = new HzyUser
+                    {
+                        UserId = RequireString(firstUser["userID"], "result.userList[0].userID", loginJson.ToString()),
+                        RegionId = RequireString(firstUser["regionID"], "result.userList[0].regionID", loginJson.ToString()),
+                        BranchId = string.Empty,
+                        SchoolId = RequireString(firstUser["schoolID"], "result.userList[0].schoolID", loginJson.ToString()),
+                        GradeId = RequireString(firstUser["grade"], "result.userList[0].grade", loginJson.ToString()),
+                        SystemId = RequireString(firstUser["systemID"], "result.userList[0].systemID", loginJson.ToString()),
+                        Token = RequireString(firstUser["accesstoken"], "result.userList[0].accesstoken", loginJson.ToString()),
+                        RoleType = Enum.TryParse<RoleType>(RequireString(firstUser["identity"], "result.userList[0].identity", loginJson.ToString()),
+                                                           ignoreCase: true,
+                                                           out var roleType) ? roleType : throw new APIException("Coursed by: Failed to retrieve roleType from Nicezhuanye platform.\n\nRemote server responded: " + loginJson.ToString())
+                    };
+                    return hzyUser;
+                }
+                else
+                {
+                    throw new APIException("Coursed by: Failed to retrieve login information from Nicezhuanye platform.\n\nRemote server responded: " + loginJson.ToString());
+                }
+            }
+
+            // /// <summary>
+            // /// 从好专业平台登录。返回<seealso cref="HzyUser"/>.
+            // /// </summary>
+            // /// <param name="cellPhone">手机号</param>
+            // /// <param name="password">密码</param>
+            // /// <returns></returns>
+            // private static async Task<HzyUser> HzyLogin(string cellPhone, string password)
+            // {
+            //     ArgumentException.ThrowIfNullOrWhiteSpace(cellPhone);
+            //     ArgumentException.ThrowIfNullOrWhiteSpace(password);
+
+            //     // 构造 parameter json
+            //     JObject parameterJson = new JObject
+            //     {
+            //         ["cellphone"] = cellPhone,
+            //         ["pwd"] = password,
+            //         ["saveCookie"] = false
+            //     };
+
+            //     const string hzyKey = "RequestMappingHa";
+            //     var encryptedData = Encode(Encoding.UTF8.GetBytes(parameterJson.ToString()), hzyKey);
+            //     WriteLog("HzyLogin | Encrypted Data: " + encryptedData, isDebug: true);
+
+            //     var loginResponse = await PostRequest("https://school.nicezhuanye.com/loginserv/login/login", encryptedData,
+            //                                           "application/json", new(){{"x-hqjl-ajax", "HQJL"}});
+            //     WriteLog("HzyLogin | RSRR: " + loginResponse, isDebug: true);
+
+            //     var loginJson = JObject.Parse(Decode(loginResponse, hzyKey));
+
+            //     var users = RequireArray(loginJson["result"]?["userList"], "result.userList", loginJson.ToString());
+            //     Console.WriteLine("hzyLogin | Users Count: " + users.Count);
+            //     foreach (var user in users)
+            //     {
+            //         Console.WriteLine("hzyLogin | User Info: " + user.ToString());
+            //     }
+            //     // 选第一个用户 我也不知道多用户怎么触发的
+            //     var firstUser = users[0];
+            //     if (firstUser is not null)
+            //     {
+            //         var hzyUser = new HzyUser
+            //         {
+            //             UserId = RequireString(firstUser["userId"], "result.userList[0].userId", loginJson.ToString()),
+            //             RegionId = RequireString(firstUser["regionId"], "result.userList[0].regionId", loginJson.ToString()),
+            //             BranchId = RequireString(firstUser["branchId"], "result.userList[0].branchId", loginJson.ToString()),
+            //             SchoolId = RequireString(firstUser["schoolId"], "result.userList[0].schoolId", loginJson.ToString()),
+            //             GradeId = RequireString(firstUser["gradeId"], "result.userList[0].gradeId", loginJson.ToString()),
+            //             SystemId = RequireString(firstUser["systemId"], "result.userList[0].systemId", loginJson.ToString()),
+            //             Token = RequireString(firstUser["token"], "result.userList[0].token", loginJson.ToString()),
+            //             RoleType = Enum.TryParse<RoleType>(RequireString(firstUser["roleType"], "result.userList[0].roleType", loginJson.ToString()),
+            //                                                ignoreCase: true,
+            //                                                out var roleType) ? roleType : throw new APIException("Coursed by: Failed to retrieve roleType from Nicezhuanye platform.\n\nRemote server responded: " + loginJson.ToString())
+            //         };
+            //         return hzyUser;
+            //     }
+            //     else
+            //     {
+            //         throw new APIException("Coursed by: Failed to retrieve login information from Nicezhuanye platform.\n\nRemote server responded: " + loginJson.ToString());
+            //     }
+
+
+
+
+            //     static string Encode(byte[] data, string key)
+            //     {
+            //         using var ms = new MemoryStream();
+            //         using (var gzip = new GZipOutputStream(ms))
+            //         {
+            //             gzip.SetLevel(6);
+            //             gzip.Write(data, 0, data.Length);
+            //             gzip.Finish();
+            //         }
+            //         var zippedData = ms.ToArray();
+
+
+            //         using var aes = Aes.Create();
+            //         aes.Mode = CipherMode.ECB;
+            //         aes.Padding = PaddingMode.PKCS7;
+            //         aes.Key = Encoding.UTF8.GetBytes(key);
+            //         using var encryptor = aes.CreateEncryptor();
+            //         var encrypted = encryptor.TransformFinalBlock(zippedData, 0, zippedData.Length);
+
+            //         return Convert.ToBase64String(encrypted);
+            //     }
+            //     static string Decode(string b64Data, string key)
+            //     {
+            //         var encrypted = Convert.FromBase64String(b64Data);
+
+            //         // AES-ECB 解密
+            //         byte[] decrypted;
+            //         using (var aes = Aes.Create())
+            //         {
+            //             aes.Mode = CipherMode.ECB;
+            //             aes.Padding = PaddingMode.PKCS7;
+            //             aes.Key = Encoding.UTF8.GetBytes(key);
+
+            //             using var decryptor = aes.CreateDecryptor();
+            //             decrypted = decryptor.TransformFinalBlock(encrypted, 0, encrypted.Length);
+            //         }
+
+            //         // inflate 解压（关键：SharpZipLib.GZip）
+            //         using var input = new MemoryStream(decrypted);
+            //         using var gzip = new GZipInputStream(input);
+            //         using var output = new MemoryStream();
+
+            //         gzip.CopyTo(output);
+
+            //         return Encoding.UTF8.GetString(output.ToArray());
+            //     }
+            // }
 
             /// <summary>
             /// 向懂你平台发送登出请求以销毁当前 <see cref="DongniUser"/> 实例中的 <see cref="Token"/>。
@@ -165,7 +555,7 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = "https://www.dongni100.com/api/base/data/logout";
+                    string url = $"{ApiEndpoint}/api/base/data/logout";
                     string serverResponse;
                     using (HttpClient client = new HttpClient())
                     {
@@ -210,7 +600,7 @@ namespace com.auntstudio.Dongnipp.SDK
 
                 try
                 {
-                    string url = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
+                    string url = $"{ApiEndpoint}/api/base/data/account/role?clientType=1";
                     string response = await GetResponse(url, Token);
                     WriteLog("DongniUser.ListRole | RSRR: " + response, isDebug: true);
 
@@ -219,32 +609,20 @@ namespace com.auntstudio.Dongnipp.SDK
 
                     if (json["status"]?.ToString() == "0")
                     {
-                        List<DongniRole> roles = new List<DongniRole>();
-
-                        foreach (var account in json["data"]!)
+                        List<DongniRole> roles = [];
+                        var data = RequireArray(json["data"], "data", response);
+                        foreach (JObject account in data.Cast<JObject>())
                         {
-                            foreach (var user in account["userList"]!)
+                            var userList = RequireArray(account["userList"], "data[].userList", response);
+                            foreach (JObject user in userList.Cast<JObject>())
                             {
-                                DongniRole role = new DongniRole(
-                                    this,
-                                    user["userSort"]?.ToString(),
-                                    user["classId"]?.ToString(),
-                                    user["className"]?.ToString(),
-                                    user["gradeId"]?.ToString(),
-                                    user["gradeName"]?.ToString(),
-                                    user["relativeId"]?.ToString(),
-                                    user["schoolId"]?.ToString(),
-                                    user["schoolName"]?.ToString(),
-                                    user["studentId"]?.ToString(),
-                                    user["studentName"]?.ToString(),
-                                    user["userType"]?.ToString()
-                                );
+                                DongniRole role = BuildRoleFromJson(user, response);
 
                                 roles.Add(role);
                                 WriteLog($"DongniUser.ListRole: Already parsed {roles.Count} roles.", isDebug: true);
                             }
                         }
-                        return (roles.ToArray());
+                        return ([.. roles]);
                     }
                     else
                     {
@@ -259,7 +637,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.ListRole Method.", ex));
                 }
-                return null;
+                return [];
             }
 
             /// <summary>
@@ -275,7 +653,9 @@ namespace com.auntstudio.Dongnipp.SDK
 
                 try
                 {
-                    string url = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
+                    if (IsNiceZhuanye) roleSort += 1;
+
+                    string url = $"{ApiEndpoint}/api/base/data/account/role?clientType=1";
                     string response = await GetResponse(url, Token);
                     WriteLog("DongniUser.SelectRole | RSRR: " + response, isDebug: true);
 
@@ -285,12 +665,12 @@ namespace com.auntstudio.Dongnipp.SDK
 
                     if (json["status"]?.ToString() == "0")
                     {
-                        JObject selectedUser = null;
-                        JArray userList = (JArray)json["data"]?[0]?["userList"];
+                        JObject? selectedUser = null;
+                        var userList = RequireArray(json["data"]?[0]?["userList"], "data[0].userList", response);
 
-                        foreach (JObject user in userList!.Cast<JObject>())
+                        foreach (JObject user in userList.Cast<JObject>())
                         {
-                            if ((string)user["userSort"] == roleSort.ToString())
+                            if (RequireString(user["userSort"], "userSort", response) == roleSort.ToString())
                             {
                                 selectedUser = user;
                                 break;
@@ -298,22 +678,7 @@ namespace com.auntstudio.Dongnipp.SDK
                         }
                         if (selectedUser != null)
                         {
-                            DongniRole role = new DongniRole(
-                                this,
-                                selectedUser["userSort"]?.ToString(),
-                                selectedUser["classId"]?.ToString(),
-                                selectedUser["className"]?.ToString(),
-                                selectedUser["gradeId"]?.ToString(),
-                                selectedUser["gradeName"]?.ToString(),
-                                selectedUser["relativeId"]?.ToString(),
-                                selectedUser["schoolId"]?.ToString(),
-                                selectedUser["schoolName"]?.ToString(),
-                                selectedUser["studentId"]?.ToString(),
-                                selectedUser["studentName"]?.ToString(),
-                                selectedUser["userType"]?.ToString()
-                            );
-
-                            return role;
+                            return BuildRoleFromJson(selectedUser, response);
                         }
                         else
                         {
@@ -334,7 +699,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.SelectRole Method.", ex));
                 }
-                return null;
+                throw new APIException("Coursed by: Cannot get specified user information.");
             }
 
             /// <summary>
@@ -350,7 +715,7 @@ namespace com.auntstudio.Dongnipp.SDK
 
                 try
                 {
-                    string url = "https://www.dongni100.com/api/base/data/account/role?clientType=1";
+                    string url = $"{ApiEndpoint}/api/base/data/account/role?clientType=1";
                     string response = await GetResponse(url, Token);
                     WriteLog("DongniUser.SelectRole | RSRR: " + response, isDebug: true);
 
@@ -360,12 +725,12 @@ namespace com.auntstudio.Dongnipp.SDK
 
                     if (json["status"]?.ToString() == "0")
                     {
-                        JObject selectedUser = null;
-                        JArray userList = (JArray)json["data"]?[0]?["userList"];
+                        JObject? selectedUser = null;
+                        var userList = RequireArray(json["data"]?[0]?["userList"], "data[0].userList", response);
 
-                        foreach (JObject user in userList!.Cast<JObject>())
+                        foreach (JObject user in userList.Cast<JObject>())
                         {
-                            if ((string)user["userSort"] == roleSort)
+                            if (RequireString(user["userSort"], "userSort", response) == roleSort)
                             {
                                 selectedUser = user;
                                 break;
@@ -373,22 +738,7 @@ namespace com.auntstudio.Dongnipp.SDK
                         }
                         if (selectedUser != null)
                         {
-                            DongniRole role = new DongniRole(
-                                this,
-                                selectedUser["userSort"]?.ToString(),
-                                selectedUser["classId"]?.ToString(),
-                                selectedUser["className"]?.ToString(),
-                                selectedUser["gradeId"]?.ToString(),
-                                selectedUser["gradeName"]?.ToString(),
-                                selectedUser["relativeId"]?.ToString(),
-                                selectedUser["schoolId"]?.ToString(),
-                                selectedUser["schoolName"]?.ToString(),
-                                selectedUser["studentId"]?.ToString(),
-                                selectedUser["studentName"]?.ToString(),
-                                selectedUser["userType"]?.ToString()
-                            );
-
-                            return role;
+                            return BuildRoleFromJson(selectedUser, response);
                         }
                         else
                         {
@@ -409,7 +759,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.SelectRole Method.", ex));
                 }
-                return null;
+                throw new APIException("Coursed by: Cannot get specified user information.");
             }
 
             /// <summary>
@@ -425,6 +775,8 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
+                    ArgumentNullException.ThrowIfNull(roleArrow);
+
                     if (roleSort >= roleArrow.Length)
                     {
                         throw new APIException($"Coursed by: The role object pointed to by the passed parameter \"roleSort\" is out of the array index range of \"roleArrow\".\nroleArrow.length = {roleArrow.Length} \n roleSort = {roleSort}");
@@ -439,7 +791,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.SelectRole Method.", ex));
                 }
-                return null;
+                throw new APIException("Coursed by: Failed to select role by roleSort.");
             }
 
             /// <summary>
@@ -455,6 +807,9 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
+                    ArgumentNullException.ThrowIfNull(roleArrow);
+                    ArgumentException.ThrowIfNullOrWhiteSpace(roleSort);
+
                     int sort = 0;
                     if (!int.TryParse(roleSort, out sort))
                     {
@@ -470,7 +825,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniUser.SelectRole Method.", ex));
                 }
-                return null;
+                throw new APIException("Coursed by: Failed to select role by roleSort.");
             }
 
 
@@ -482,7 +837,7 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 Type type = this.GetType();
                 string className = type.Name;
-                string namespaceName = type.Namespace;
+                string namespaceName = type.Namespace ?? string.Empty;
 
                 PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
                 var propertiesWithGet = properties.Where(p => p.GetGetMethod() != null);
@@ -577,15 +932,29 @@ namespace com.auntstudio.Dongnipp.SDK
                 this.UserType = userType;
             }
 
+            private DongniExam BuildExamFromJson(JObject exam, string serverResponse)
+            {
+                return new DongniExam(
+                    this,
+                    RequireString(exam["examId"], "examId", serverResponse),
+                    RequireString(exam["examName"], "examName", serverResponse),
+                    RequireString(exam["examType"], "examType", serverResponse),
+                    RequireString(exam["startDate"], "startDate", serverResponse),
+                    RequireString(exam["endDate"], "endDate", serverResponse)
+                );
+            }
+
             /// <summary>
-            /// 获取最近两次的考试结果。
+            /// 获取最近数次的考试结果。
             /// </summary>
             /// <returns><see cref="DongniExam"/> 实例数组</returns>
             public async Task<DongniExam[]> GetLatest()
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/exam/plan/student/latest?clientType=1&examType=2,3,4,5,7,9,10&userId={User.UserId}&studentId={StudentId}";
+                    string url = $"{User.ApiEndpoint}/api/exam/plan/student/latest?clientType=1&examType=2,3,4,5,7,9,10&userId={User.UserId}&studentId={StudentId}";
+                    if (User.IsNiceZhuanye) url += $"&schoolId={SchoolId}";
+
                     string response = await GetResponse(url, User.Token);
 
                     WriteLog("DongniRole.GetLatest | RSRR: " + response, isDebug: true);
@@ -593,33 +962,61 @@ namespace com.auntstudio.Dongnipp.SDK
                     WriteLog("DongniRole.GetLatest: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
 
-                    if (json["status"]?.ToString() == "0")
+                    if (User.IsNiceZhuanye)
                     {
-                        DongniExam firstExam = new DongniExam(
-                            this,
-                            (string)json["data"]?[0]?["examId"],
-                            (string)json["data"]?[0]?["examName"],
-                            (string)json["data"]?[0]?["examType"],
-                            (string)json["data"]?[0]?["startDate"],
-                            (string)json["data"]?[0]?["endDate"]
-                            );
-                        WriteLog("DongniRole.GetLatest: Parsed 1st exam.", isDebug: true);
-                        DongniExam secondExam = new DongniExam(
-                            this,
-                            (string)json["data"]?[1]?["examId"],
-                            (string)json["data"]?[1]?["examName"],
-                            (string)json["data"]?[1]?["examType"],
-                            (string)json["data"]?[1]?["startDate"],
-                            (string)json["data"]?[1]?["endDate"]
-                            );
-                        WriteLog("DongniRole.GetLatest: Parsed 2st exam.", isDebug: true);
+                        if (json["status"]?.ToString() == "0")
+                        {
+                            var examsJArray = RequireArray(json["data"]?["exam"], "data.exam", response);
+                            if (examsJArray.Count < 1)
+                            {
+                                throw new APIException("Coursed by: Failed to retrieve any exams.\n\nRemote server responded: " + response);
+                            }
 
-                        return [firstExam, secondExam];
+                            List<DongniExam> exams = [];
+                            for (int i = 0; i < examsJArray.Count; i++)
+                            {
+                                var examObject = RequireObject(examsJArray[i], $"data.exam[{i}]", response);
+                                DongniExam exam = BuildExamFromJson(examObject, response);
+                                exams.Add(exam);
+                                WriteLog($"DongniRole.GetLatest: Parsed {exams.Count} exams.", isDebug: true);
+                            }
+                            return [.. exams];
+                        }
+                        else
+                        {
+                            throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responded: " + response);
+                        }
                     }
                     else
                     {
-                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responded: " + response);
+                        if (json["status"]?.ToString() == "0")
+                        {
+                            var data = RequireArray(json["data"], "data", response);
+                            if (data.Count < 1)
+                            {
+                                throw new APIException("Coursed by: Failed to retrieve any exams.\n\nRemote server responded: " + response);
+                            }
+
+                            List<DongniExam> exams = [];
+
+                            for (int i = 0; i < data.Count; i++)
+                            {
+                                var examObject = RequireObject(data[i], $"data[{i}]", response);
+                                DongniExam exam = BuildExamFromJson(examObject, response);
+                                exams.Add(exam);
+                                WriteLog($"DongniRole.GetLatest: Parsed {exams.Count} exams.", isDebug: true);
+                            }
+
+
+                            return [.. exams];
+                        }
+                        else
+                        {
+                            throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responded: " + response);
+                        }
                     }
+
+
                 }
                 catch (APIException ex)
                 {
@@ -629,7 +1026,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniRole.GetLatest Method.", ex));
                 }
-                return null;
+                return [];
             }
 
             /// <summary>
@@ -640,7 +1037,7 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/exam/plan/student/exam/list?clientType=1&schoolId={SchoolId}&examType=2,3,4,5,7,10&pageSize=100&pageNo=1&userId={User.UserId}&studentId={StudentId}";
+                    string url = $"{User.ApiEndpoint}/api/exam/plan/student/exam/list?clientType=1&schoolId={SchoolId}&examType=2,3,4,5,7,10&pageSize=100&pageNo=1&userId={User.UserId}&studentId={StudentId}";
                     string response = await GetResponse(url, User.Token);
 
                     WriteLog("DongniRole.GetList | RSRR: " + response, isDebug: true);
@@ -649,23 +1046,17 @@ namespace com.auntstudio.Dongnipp.SDK
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        List<DongniExam> dongniExams = new List<DongniExam>();
-
-                        for (int i = 0; i < json["data"]?["exam"]?.Count(); i++)
+                        List<DongniExam> dongniExams = [];
+                        var examList = RequireArray(json["data"]?["exam"], "data.exam", response);
+                        for (int i = 0; i < examList.Count; i++)
                         {
-                            DongniExam dongniExam = new DongniExam(
-                                this,
-                                (string)json["data"]?["exam"]?[i]?["examId"],
-                                (string)json["data"]?["exam"]?[i]?["examName"],
-                                (string)json["data"]?["exam"]?[i]?["examType"],
-                                (string)json["data"]?["exam"]?[i]?["startDate"],
-                                (string)json["data"]?["exam"]?[i]?["endDate"]
-                                );
+                            var examObject = RequireObject(examList[i], $"data.exam[{i}]", response);
+                            DongniExam dongniExam = BuildExamFromJson(examObject, response);
                             dongniExams.Add(dongniExam);
                             WriteLog($"DongniRole.GetList: Parsed {dongniExams.Count} exams.", isDebug: true);
                         }
 
-                        return dongniExams.ToArray();
+                        return [.. dongniExams];
                     }
                     else
                     {
@@ -680,18 +1071,18 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniRole.GetList Method.", ex));
                 }
-                return null;
+                return [];
             }
 
             /// <summary>
-            /// 获取该角色下所有课程及其对应 ID。
+            /// 获取该角色下所有科目及其对应 ID。正常查询科目应调用 <seealso cref="CourseIdToName"/> 以使用可能的缓存。
             /// </summary>
             /// <returns><see cref="DongniCourse"/> 实例对象，含了每个科目的名称、对应 courseId</returns>
             public async Task<DongniCourse[]> GetCoursesList()
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/base/data/system/account/relative/all?clientType=1&relativeId={RelativeId}&userId={User.UserId}&studentId={StudentId}";
+                    string url = $"{User.ApiEndpoint}/api/base/data/system/account/relative/all?clientType=1&relativeId={RelativeId}&userId={User.UserId}&studentId={StudentId}";
                     string response = await GetResponse(url, User.Token);
                     WriteLog("DongniRole.GetCoursesList | RSRR: " + response, isDebug: true);
 
@@ -699,17 +1090,17 @@ namespace com.auntstudio.Dongnipp.SDK
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        JArray courseList = (JArray)json["data"]?["course"];
-                        List<DongniCourse> dongniCourses = new List<DongniCourse>();
-                        foreach (JObject course in courseList!.Cast<JObject>())
+                        JArray courseList = RequireArray(json["data"]?["course"], "data.course", response);
+                        List<DongniCourse> dongniCourses = [];
+                        foreach (JObject course in courseList.Cast<JObject>())
                         {
                             dongniCourses.Add(
                                 new DongniCourse(
-                                int.Parse((string)course["courseId"]!), 
-                                (string)course["courseName"])
+                                RequireInt(course["courseId"], "courseId", response),
+                                RequireString(course["courseName"], "courseName", response))
                                 );
                         }
-                        return dongniCourses.ToArray();
+                        return [.. dongniCourses];
                     }
                     else
                     {
@@ -724,11 +1115,12 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniRole.CourseIdToName Method.", ex));
                 }
-                return null;
+                return [];
             }
 
+
             /// <summary>
-            /// 利用 <paramref name="courseId"/> 获得 courseName。
+            /// 利用 <paramref name="courseId"/> 获得 courseName。有缓存时将从内存缓存取值，没有缓存时将请求API获取数据并更新缓存。
             /// </summary>
             /// <param name="courseId">已转换为整数类型的 courseId</param>
             /// <returns><paramref name="courseId"/> 对应的科目的中文名称</returns>
@@ -736,29 +1128,42 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/base/data/export/course/common/all?clientType=1&schoolId={SchoolId}&userId={User.UserId}&studentId={StudentId}";
-                    string response = await GetResponse(url, User.Token);
-                    WriteLog("DongniRole.CourseIdToName | RSRR: " + response, isDebug: true);
-
-                    WriteLog("DongniRole.CourseIdToName: Trying to parse...", isDebug: true);
-                    JObject json = JObject.Parse(response);
-                    if (json["status"]?.ToString() == "0")
+                    if (InternalCacheProvider.Cache.TryGetValue("DNPP_Course", out DongniCourse[]? cachedCourses))
                     {
-                        JArray courseList = (JArray)json["course"];
-                        foreach (JObject course in courseList!.Cast<JObject>())
+                        var cachedCourse = cachedCourses?.FirstOrDefault(c => c.CourseId == courseId);
+                        if (cachedCourse is not null)
                         {
-                            if ((string)course["courseId"] == courseId.ToString())
-                            {
-                                return (string)course["courseName"];
-                            }
-
+                            WriteLog($"DongniRole.CourseIdToName: Cache hit for courseId {courseId}.", isDebug: true);
+                            return cachedCourse.CourseName;
                         }
-                        throw new APIException("Coursed by: Cannot fetch specified course.\n\nRemote server responded: " + response + "\n\nTarget courseId: " + courseId);
+                        else
+                        {
+                            WriteLog($"DongniRole.CourseIdToName: Cache miss for courseId {courseId}. Course not found in cached courses.", isDebug: true);
+
+                            var courses = await GetCoursesList();
+                            var cacheOpt = new MemoryCacheEntryOptions()
+                                            .SetSlidingExpiration(TimeSpan.FromMinutes(10)) // 活跃就续命
+                                            .SetAbsoluteExpiration(TimeSpan.FromHours(6)); // 但封顶寿命为1小时
+                            InternalCacheProvider.Cache.Set("DNPP_Course", courses, cacheOpt);
+
+                            return courses.FirstOrDefault(c => c.CourseId == courseId)?.CourseName
+                                    ?? throw new APIException($"Coursed by: Cannot fetch specified course.\n\nTarget courseId: {courseId}");
+                        }
                     }
                     else
                     {
-                        throw new APIException("Coursed by: Status value is not 0.\n\nRemote server responded: " + response);
+                        WriteLog($"DongniRole.CourseIdToName: Cache miss for courseId {courseId}.", isDebug: true);
+
+                        var courses = await GetCoursesList();
+                        var cacheOpt = new MemoryCacheEntryOptions()
+                                        .SetSlidingExpiration(TimeSpan.FromMinutes(10))
+                                        .SetAbsoluteExpiration(TimeSpan.FromHours(6));
+                        InternalCacheProvider.Cache.Set("DNPP_Course", courses, cacheOpt);
+
+                        return courses.FirstOrDefault(c => c.CourseId == courseId)?.CourseName
+                                ?? throw new APIException($"Coursed by: Cannot fetch specified course.\n\nTarget courseId: {courseId}");
                     }
+
                 }
                 catch (APIException ex)
                 {
@@ -768,7 +1173,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniRole.CourseIdToName Method.", ex));
                 }
-                return null;
+                throw new APIException($"Coursed by: Cannot fetch specified course.\n\nTarget courseId: {courseId}");
             }
 
             /// <summary>
@@ -779,7 +1184,7 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 Type type = this.GetType();
                 string className = type.Name;
-                string namespaceName = type.Namespace;
+                string namespaceName = type.Namespace ?? string.Empty;
 
                 PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
                 var propertiesWithGet = properties.Where(p => p.GetGetMethod() != null);
@@ -838,6 +1243,24 @@ namespace com.auntstudio.Dongnipp.SDK
                 this.EndDate = endDate;
             }
 
+            private (string FullMark, string TotalScore) ReadScore(JObject json, string response, bool fromArray)
+            {
+                JToken scoreNode = fromArray
+                    ? RequireObject(json["data"]?[0], "data[0]", response)
+                    : RequireObject(json["data"], "data", response);
+
+                return (
+                    RequireString(scoreNode["fullMark"], "fullMark", response),
+                    RequireString(scoreNode["totalScore"], "totalScore", response)
+                );
+            }
+
+            private string ReadRanking(JObject json, string response, string rankingPath, string fieldName)
+            {
+                var rankingToken = json.SelectToken(rankingPath);
+                return RequireString(rankingToken, fieldName, response);
+            }
+
             /// <summary>
             /// 获取默认科目、默认 statId 的考试分数。
             /// </summary>
@@ -846,17 +1269,14 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId=&examId={ExamId}&statId={await GetDefaultStatId()}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId=&examId={ExamId}&statId={await GetDefaultStatId()}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetScore | RSRR: " + response, isDebug: true);
                     WriteLog("DongniExam.GetScore: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        string fullMark = (string)json["data"]?["fullMark"];
-                        string totalScore = (string)json["data"]?["totalScore"];
-
-                        return (fullMark, totalScore);
+                        return ReadScore(json, response, fromArray: false);
                     }
                     else
                     {
@@ -871,7 +1291,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetScore Method.", ex));
                 }
-                return (null, null);
+                throw new APIException("Coursed by: Failed to retrieve score.");
             }
 
             /// <summary>
@@ -883,17 +1303,14 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId=&examId={ExamId}&statId={statId}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/view/monitor/exam/school/scoreSection?clientType=1&courseId=&examId={ExamId}&statId={statId}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetScore | RSRR: " + response, isDebug: true);
                     WriteLog("DongniExam.GetScore: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        string fullMark = (string)json["data"]?["fullMark"];
-                        string totalScore = (string)json["data"]?["totalScore"];
-
-                        return (fullMark, totalScore);
+                        return ReadScore(json, response, fromArray: false);
                     }
                     else
                     {
@@ -908,7 +1325,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetScore Method.", ex));
                 }
-                return (null, null);
+                throw new APIException("Coursed by: Failed to retrieve score.");
             }
 
             /// <summary>
@@ -920,7 +1337,7 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/course/scoreSection?clientType=1&courseId={courseId}&examId={ExamId}&statId={await GetDefaultStatId()}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/view/monitor/exam/school/course/scoreSection?clientType=1&courseId={courseId}&examId={ExamId}&statId={await GetDefaultStatId()}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     // 指定courseId 必须走这个接口URL
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetScore | RSRR: " + response, isDebug: true);
@@ -928,10 +1345,7 @@ namespace com.auntstudio.Dongnipp.SDK
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        string fullMark = (string)json["data"]?[0]?["fullMark"];
-                        string totalScore = (string)json["data"]?[0]?["totalScore"];
-
-                        return (fullMark, totalScore);
+                        return ReadScore(json, response, fromArray: true);
                     }
                     else
                     {
@@ -946,7 +1360,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetScore Method.", ex));
                 }
-                return (null, null);
+                throw new APIException("Coursed by: Failed to retrieve score.");
             }
 
             /// <summary>
@@ -959,17 +1373,14 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/view/monitor/exam/school/course/scoreSection?clientType=1&courseId={courseId}&examId={ExamId}&statId={statId}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/view/monitor/exam/school/course/scoreSection?clientType=1&courseId={courseId}&examId={ExamId}&statId={statId}&classId={Role.ClassId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetScore | RSRR: " + response, isDebug: true);
                     WriteLog("DongniExam.GetScore: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        string fullMark = (string)json["data"]?[0]?["fullMark"];
-                        string totalScore = (string)json["data"]?[0]?["totalScore"];
-
-                        return (fullMark, totalScore);
+                        return ReadScore(json, response, fromArray: true);
                     }
                     else
                     {
@@ -984,7 +1395,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetScore Method.", ex));
                 }
-                return (null, null);
+                throw new APIException("Coursed by: Failed to retrieve score.");
             }
 
             /// <summary>
@@ -995,17 +1406,14 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={await GetDefaultStatId()}&courseId=&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={await GetDefaultStatId()}&courseId=&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetExamRanking | RSRR: " + response, isDebug: true);
                     WriteLog("DongniExam.GetExamRanking: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        // 检查是否存在 examRanking 键，如果没有则抛出异常
-                        JToken examRankingToken = json.SelectToken("data.list[0].examRanking") ?? throw new APIException("Coursed by: Cannot find examRanking value.Maybe unsupported.\n\nRemote server responded: " + response);
-                        string examRanking = (string)json["data"]?["list"]?[0]?["examRanking"];
-                        return examRanking;
+                        return ReadRanking(json, response, "data.list[0].examRanking", "examRanking");
                     }
                     else
                     {
@@ -1020,7 +1428,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetExamRanking Method.", ex));
                 }
-                return null;
+                throw new APIException("Coursed by: Failed to retrieve exam ranking.");
             }
 
             /// <summary>
@@ -1032,17 +1440,14 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={statId}&courseId=&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={statId}&courseId=&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetExamRanking | RSRR: " + response, isDebug: true);
                     WriteLog("DongniExam.GetExamRanking: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        // 检查是否存在 examRanking 键，如果没有则抛出异常
-                        JToken examRankingToken = json.SelectToken("data.list[0].examRanking") ?? throw new APIException("Coursed by: Cannot find examRanking value.Maybe unsupported.\n\nRemote server responded: " + response);
-                        string examRanking = (string)json["data"]?["list"]?[0]?["examRanking"];
-                        return examRanking;
+                        return ReadRanking(json, response, "data.list[0].examRanking", "examRanking");
                     }
                     else
                     {
@@ -1057,7 +1462,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetExamRanking Method.", ex));
                 }
-                return null;
+                throw new APIException("Coursed by: Failed to retrieve exam ranking.");
             }
 
             /// <summary>
@@ -1069,17 +1474,14 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={await GetDefaultStatId()}&courseId={courseId}&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={await GetDefaultStatId()}&courseId={courseId}&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetExamRanking | RSRR: " + response, isDebug: true);
                     WriteLog("DongniExam.GetExamRanking: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        // 检查是否存在examRanking键，如果没有则抛出异常
-                        JToken examRankingToken = json.SelectToken("data.list[0].examRanking") ?? throw new APIException("Coursed by: Cannot find examRanking value.Maybe unsupported.\n\nRemote server responded: " + response);
-                        string examRanking = (string)json["data"]?["list"]?[0]?["examRanking"];
-                        return examRanking;
+                        return ReadRanking(json, response, "data.list[0].examRanking", "examRanking");
                     }
                     else
                     {
@@ -1094,7 +1496,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetExamRanking Method.", ex));
                 }
-                return null;
+                throw new APIException("Coursed by: Failed to retrieve exam ranking.");
             }
 
             /// <summary>
@@ -1107,17 +1509,14 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={statId}&courseId={courseId}&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={statId}&courseId={courseId}&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetExamRanking | RSRR: " + response, isDebug: true);
                     WriteLog("DongniExam.GetExamRanking: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        // 检查是否存在examRanking键，如果没有则抛出异常
-                        JToken examRankingToken = json.SelectToken("data.list[0].examRanking") ?? throw new APIException("Coursed by: Cannot find examRanking value.Maybe unsupported.\n\nRemote server responded: " + response);
-                        string examRanking = (string)json["data"]?["list"]?[0]?["examRanking"];
-                        return examRanking;
+                        return ReadRanking(json, response, "data.list[0].examRanking", "examRanking");
                     }
                     else
                     {
@@ -1132,7 +1531,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetExamRanking Method.", ex));
                 }
-                return null;
+                throw new APIException("Coursed by: Failed to retrieve exam ranking.");
             }
 
             /// <summary>
@@ -1143,17 +1542,14 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={await GetDefaultStatId()}&courseId=&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={await GetDefaultStatId()}&courseId=&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetClassRanking | RSRR: " + response, isDebug: true);
                     WriteLog("DongniExam.GetClassRanking: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        // 检查是否存在examRanking键，如果没有则抛出异常
-                        JToken examRankingToken = json.SelectToken("data.list[0].classRanking") ?? throw new APIException("Coursed by: Cannot find classRanking value.Maybe unsupported.\n\nRemote server responded: " + response);
-                        string examRanking = (string)json["data"]?["list"]?[0]?["classRanking"];
-                        return examRanking;
+                        return ReadRanking(json, response, "data.list[0].classRanking", "classRanking");
                     }
                     else
                     {
@@ -1168,7 +1564,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetClassRanking Method.", ex));
                 }
-                return null;
+                throw new APIException("Coursed by: Failed to retrieve class ranking.");
             }
 
             /// <summary>
@@ -1180,17 +1576,14 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={statId}&courseId=&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={statId}&courseId=&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetClassRanking | RSRR: " + response, isDebug: true);
                     WriteLog("DongniExam.GetClassRanking: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        // 检查是否存在examRanking键，如果没有则抛出异常
-                        JToken examRankingToken = json.SelectToken("data.list[0].classRanking") ?? throw new APIException("Coursed by: Cannot find classRanking value.Maybe unsupported.\n\nRemote server responded: " + response);
-                        string examRanking = (string)json["data"]?["list"]?[0]?["classRanking"];
-                        return examRanking;
+                        return ReadRanking(json, response, "data.list[0].classRanking", "classRanking");
                     }
                     else
                     {
@@ -1205,7 +1598,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetClassRanking Method.", ex));
                 }
-                return null;
+                throw new APIException("Coursed by: Failed to retrieve class ranking.");
             }
 
             /// <summary>
@@ -1217,17 +1610,14 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={await GetDefaultStatId()}&courseId={courseId}&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={await GetDefaultStatId()}&courseId={courseId}&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetClassRanking | RSRR: " + response, isDebug: true);
                     WriteLog("DongniExam.GetClassRanking: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        // 检查是否存在examRanking键，如果没有则抛出异常
-                        JToken examRankingToken = json.SelectToken("data.list[0].classRanking") ?? throw new APIException("Coursed by: Cannot find classRanking value.Maybe unsupported.\n\nRemote server responded: " + response);
-                        string examRanking = (string)json["data"]?["list"]?[0]?["classRanking"];
-                        return examRanking;
+                        return ReadRanking(json, response, "data.list[0].classRanking", "classRanking");
                     }
                     else
                     {
@@ -1242,7 +1632,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetClassRanking Method.", ex));
                 }
-                return null;
+                throw new APIException("Coursed by: Failed to retrieve class ranking.");
             }
 
             /// <summary>
@@ -1255,17 +1645,14 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={statId}&courseId={courseId}&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/data/exam/student/weChat/scoreLevel?clientType=1&schoolId={Role.SchoolId}&statId={statId}&courseId={courseId}&examId={ExamId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetClassRanking | RSRR: " + response, isDebug: true);
                     WriteLog("DongniExam.GetClassRanking: Trying to parse...", isDebug: true);
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        // 检查是否存在examRanking键，如果没有则抛出异常
-                        JToken examRankingToken = json.SelectToken("data.list[0].classRanking") ?? throw new APIException("Coursed by: Cannot find classRanking value.Maybe unsupported.\n\nRemote server responded: " + response);
-                        string examRanking = (string)json["data"]?["list"]?[0]?["classRanking"];
-                        return examRanking;
+                        return ReadRanking(json, response, "data.list[0].classRanking", "classRanking");
                     }
                     else
                     {
@@ -1280,7 +1667,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetClassRanking Method.", ex));
                 }
-                return null;
+                throw new APIException("Coursed by: Failed to retrieve class ranking.");
             }
 
             /// <summary>
@@ -1297,7 +1684,7 @@ namespace com.auntstudio.Dongnipp.SDK
                     {
                         return "默认";
                     }
-                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/courseInfo?clientType=1&examId={ExamId}&statId={await GetDefaultStatId()}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/data/exam/student/weChat/courseInfo?clientType=1&examId={ExamId}&statId={await GetDefaultStatId()}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.CourseIdToName | RSRR: " + response, isDebug: true);
 
@@ -1305,12 +1692,12 @@ namespace com.auntstudio.Dongnipp.SDK
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        JArray courseList = (JArray)json["data"];
-                        foreach (JObject course in courseList!.Cast<JObject>())
+                        JArray courseList = RequireArray(json["data"], "data", response);
+                        foreach (JObject course in courseList.Cast<JObject>())
                         {
-                            if ((string)course["courseId"] == courseId.ToString())
+                            if (RequireString(course["courseId"], "courseId", response) == courseId.ToString())
                             {
-                                return (string)course["courseName"];
+                                return RequireString(course["courseName"], "courseName", response);
                             }
 
                         }
@@ -1329,7 +1716,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.CourseIdToName Method.", ex));
                 }
-                return null;
+                throw new APIException($"Coursed by: Cannot fetch specified course.\n\nTarget courseId: {courseId}");
             }
 
             /// <summary>
@@ -1347,7 +1734,7 @@ namespace com.auntstudio.Dongnipp.SDK
                     {
                         return "默认";
                     }
-                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/courseInfo?clientType=1&examId={ExamId}&statId={statId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/data/exam/student/weChat/courseInfo?clientType=1&examId={ExamId}&statId={statId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.CourseIdToName | RSRR: " + response, isDebug: true);
 
@@ -1355,12 +1742,12 @@ namespace com.auntstudio.Dongnipp.SDK
                     JObject json = JObject.Parse(response);
                     if (json["status"]?.ToString() == "0")
                     {
-                        JArray courseList = (JArray)json["data"];
-                        foreach (JObject course in courseList!.Cast<JObject>())
+                        JArray courseList = RequireArray(json["data"], "data", response);
+                        foreach (JObject course in courseList.Cast<JObject>())
                         {
-                            if ((string)course["courseId"] == courseId.ToString())
+                            if (RequireString(course["courseId"], "courseId", response) == courseId.ToString())
                             {
-                                return (string)course["courseName"];
+                                return RequireString(course["courseName"], "courseName", response);
                             }
 
                         }
@@ -1379,9 +1766,9 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.CourseIdToName Method.", ex));
                 }
-                return null;
+                throw new APIException($"Coursed by: Cannot fetch specified course.\n\nTarget courseId: {courseId}");
             }
-            
+
             /// <summary>
             /// 获取该考试默认的 statId。该值将在一些未指定 statId 参数的方法中替代缺省的 statId 来拼接接口 URL。
             /// </summary>
@@ -1391,7 +1778,7 @@ namespace com.auntstudio.Dongnipp.SDK
 
                 try
                 {
-                    string url = $"https://www.dongni100.com/api/analysis/data/exam/student/weChat/all/examStatId?clientType=1&examId={ExamId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
+                    string url = $"{Role.User.ApiEndpoint}/api/analysis/data/exam/student/weChat/all/examStatId?clientType=1&examId={ExamId}&schoolId={Role.SchoolId}&userId={Role.User.UserId}&studentId={Role.StudentId}";
                     string response = await GetResponse(url, Role.User.Token);
                     WriteLog("DongniExam.GetDeafultStatId | RSRR: " + response, isDebug: true);
 
@@ -1400,7 +1787,7 @@ namespace com.auntstudio.Dongnipp.SDK
 
                     if (json["status"]?.ToString() == "0")
                     {
-                        return json["data"]?["statId"]?.ToString();
+                        return RequireString(json["data"]?["statId"], "data.statId", response);
                     }
                     else
                     {
@@ -1416,7 +1803,7 @@ namespace com.auntstudio.Dongnipp.SDK
                 {
                     ErrorOccurred?.Invoke(null, new ErrorEventArgs("An program exception occurred at DongniExam.GetDefaultStatId Method.", ex));
                 }
-                return null;
+                throw new APIException("Coursed by: Failed to retrieve default statId.");
             }
 
             /// <summary>
@@ -1427,7 +1814,7 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 Type type = this.GetType();
                 string className = type.Name;
-                string namespaceName = type.Namespace;
+                string namespaceName = type.Namespace ?? string.Empty;
 
                 PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
                 var propertiesWithGet = properties.Where(p => p.GetGetMethod() != null);
@@ -1438,22 +1825,12 @@ namespace com.auntstudio.Dongnipp.SDK
         }
 
         /// <summary>
-        /// 一个懂你平台的科目实例。该实例仅记录科目中文名称以及科目对应的 courseId。
+        /// 懂你平台的科目对应信息记录。
         /// </summary>
-        /// <param name="courseId">科目对应 courseId</param>
-        /// <param name="courseName">科目的中文名称</param>
-        public class DongniCourse(int courseId, string courseName)
-        {
-            /// <summary>
-            /// 科目对应的 CourseId。
-            /// </summary>
-            public int CourseId { get; set; } = courseId;
+        /// <param name="CourseId">整数型 courseId</param>
+        /// <param name="CourseName">对应的科目中文名称</param>
 
-            /// <summary>
-            /// 科目中文名称。
-            /// </summary>
-            public string CourseName { get; set; } = courseName;
-        }
+        public record DongniCourse(int CourseId, string CourseName);
 
 
         /// <summary>
@@ -1466,6 +1843,7 @@ namespace com.auntstudio.Dongnipp.SDK
         {
             using (HttpClient client = new HttpClient())
             {
+                client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0");
                 client.DefaultRequestHeaders.Add("Dongni-Login", token);
                 HttpResponseMessage response = await client.GetAsync(url);
                 string responseContent = await response.Content.ReadAsStringAsync();
@@ -1482,6 +1860,7 @@ namespace com.auntstudio.Dongnipp.SDK
         {
             using (HttpClient client = new HttpClient())
             {
+                client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0");
                 HttpResponseMessage response = await client.GetAsync(url);
                 string responseContent = await response.Content.ReadAsStringAsync();
                 return responseContent;
@@ -1494,12 +1873,21 @@ namespace com.auntstudio.Dongnipp.SDK
         /// <param name="url">欲发送请求的URL</param>
         /// <param name="postContent">欲POST的内容 (请求体)</param>
         /// <param name="contentType">请求体内容类型</param>
+        /// <param name="headers">可选的请求头列表</param>
         /// <returns>返回服务器的Response。</returns>
-        private static async Task<string> PostRequest(string url, string postContent, string contentType)
+        private static async Task<string> PostRequest(string url, string postContent, string contentType, Dictionary<string, string>? headers = null)
         {
             using (HttpClient client = new HttpClient())
             {
                 StringContent content = new StringContent(postContent, Encoding.UTF8, contentType);
+                client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0");
+                if (headers is not null)
+                {
+                    foreach (var header in headers)
+                    {
+                        client.DefaultRequestHeaders.Add(header.Key, header.Value);
+                    }
+                }
                 HttpResponseMessage response = await client.PostAsync(url, content);
                 string responseContent = await response.Content.ReadAsStringAsync();
                 return responseContent;
@@ -1511,7 +1899,7 @@ namespace com.auntstudio.Dongnipp.SDK
         /// </summary>
         /// <param name="message">欲输出的日志内容</param>
         /// <param name="eventType">日志信息的类型 (例如INFO、WARNING等, 默认为INFO)</param>
-        /// <param name="isDebug">是否是Debug类型。如果为true，则仅在全局debugging == true时输出。默认为false。</param>
+        /// <param name="isDebug">是否是Debug类型。如果为 true，则仅在全局 debugging == true时输出。默认为 false。</param>
         private static void WriteLog(string message, string eventType = "INFO", bool isDebug = false)
         {
             if (CustomLogHandler is not null)
@@ -1522,18 +1910,18 @@ namespace com.auntstudio.Dongnipp.SDK
             {
                 if (isDebug && debugging)
                 {
-                    Debug.WriteLine($"[Debug / {eventType}] " + message);
+                    Debug.WriteLine($"[{DateTime.Now} | Debug / {eventType}] " + message);
                 }
                 else if (!isDebug)
                 {
-                    Debug.WriteLine($"[{eventType}]" + message);
+                    Debug.WriteLine($"[{DateTime.Now} | {eventType}]" + message);
                 }
             }
 
 
         }
         /// <summary>
-        /// 设置在dongniSDK中是否输出调试信息。
+        /// 设置在 dongniSDK 中是否输出调试信息。
         /// </summary>
         /// <param name="debug">true为全局输出调试日志，反之不输出。</param>
         public static void SetDebug(bool debug)
@@ -1547,12 +1935,12 @@ namespace com.auntstudio.Dongnipp.SDK
         /// </summary>
         /// <param name="sender">事件源</param>
         /// <param name="e">包含事件数据的 <see cref="ErrorEventArgs"/> 实例。</param>
-        public delegate void ErrorHandler(object sender, ErrorEventArgs e);
+        public delegate void ErrorHandler(object? sender, ErrorEventArgs e);
 
         /// <summary>
         /// 当发生错误时触发的事件。
         /// </summary>
-        public static event ErrorHandler ErrorOccurred;
+        public static event ErrorHandler? ErrorOccurred;
 
         /// <summary>
         /// 提供错误事件数据的类。
